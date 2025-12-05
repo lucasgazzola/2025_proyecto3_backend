@@ -30,8 +30,8 @@ export class User {
   @Prop()
   deletedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'SubArea', required: true })
-  subArea: Types.ObjectId;
+  // @Prop({ type: Types.ObjectId, ref: 'SubArea', required: true })
+  // subArea: Types.ObjectId;
 
   @Prop({ type: String, enum: Object.values(RoleEnum), default: RoleEnum.USER })
   role: RoleEnum;
@@ -39,7 +39,10 @@ export class User {
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Project' }], default: [] })
   projects: Types.ObjectId[];
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'ClaimStateHistory' }], default: [] })
+  @Prop({
+    type: [{ type: Types.ObjectId, ref: 'ClaimStateHistory' }],
+    default: [],
+  })
   claimHistories: Types.ObjectId[];
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Claim' }], default: [] })

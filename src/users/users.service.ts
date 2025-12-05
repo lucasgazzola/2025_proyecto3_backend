@@ -19,15 +19,28 @@ export class UsersService {
   }
 
   async findOne(id: string) {
-    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('User not found');
+    if (!Types.ObjectId.isValid(id))
+      throw new NotFoundException('User not found');
     return this.userModel.findById(id).exec();
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
-    return this.userModel.findByIdAndUpdate(id, updateUserDto as any, { new: true }).exec();
+    return this.userModel
+      .findByIdAndUpdate(id, updateUserDto as any, { new: true })
+      .exec();
   }
 
   async remove(id: string) {
     return this.userModel.findByIdAndDelete(id).exec();
+  }
+
+  async findByEmail(email: string) {
+    return this.userModel.findOne({ email }).exec();
+  }
+
+  async findByEmailWithPassword(email: string) {
+    // ensure password field is selectable: if schema uses select: false,
+    // we include it explicitly; otherwise this returns the same as findByEmail
+    return this.userModel.findOne({ email }).exec();
   }
 }

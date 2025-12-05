@@ -7,6 +7,7 @@ import { ClaimsModule } from './claims/claims.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ProjectsModule } from './projects/projects.module';
 import { UsersModule } from './users/users.module';
+import { AuthModule } from './auth/auth.module';
 import { MongooseSchemasModule } from './mongoose/mongoose-schemas.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { MongooseSchemasModule } from './mongoose/mongoose-schemas.module';
     ClaimsModule,
     DashboardModule,
     ProjectsModule,
+    AuthModule,
     UsersModule,
   ],
   controllers: [AppController],

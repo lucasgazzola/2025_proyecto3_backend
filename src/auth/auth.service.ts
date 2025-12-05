@@ -10,90 +10,75 @@ import { Payload } from '../common/interfaces/payload';
 import { Role } from '../common/enums/roles.enums';
 import * as jwt from 'jsonwebtoken';
 import { config } from '../common/config/jwtConfig';
+import { UsersService } from '../users/users.service';
 
 type TokenPayload = Omit<Payload, 'iat' | 'exp'>;
 
 @Injectable()
 export class AuthService {
-  constructor() {
-    // private usersService: UsuarioService,
-  }
+  constructor(private readonly usersService: UsersService) {}
 
   async register(body: RegisterAuthDto) {
-    // const userExists = await this.usersService.findByEmail(body.email);
+    const userExists = await this.usersService.findByEmail(body.email);
+    if (userExists) {
+      throw new HttpException('Email already registered', 400);
+    }
 
-    // if (userExists) {
-    //   await this.logsService.createFailureLog(
-    //     'REGISTER_USER',
-    //     undefined,
-    //     `Intento de registro con email duplicado: ${body.email}`,
-    //   );
-    //   throw new HttpException('El correo ya está registrado', 400);
-    // }
-
-    // Confirm passwords match
     if ((body as any).password !== (body as any).confirmPassword) {
-      throw new HttpException('Las contraseñas no coinciden', 400);
+      throw new HttpException('Passwords do not match', 400);
     }
 
     const hashedPassword = await bcrypt.hash(body.password, 10);
 
-    // const newUser = await this.usersService.create({
-    //   email: body.email,
-    //   firstName: body.firstName,
-    //   lastName: body.lastName,
-    //   password: hashedPassword,
-    //   role: body.role ?? Role.USER,
-    // });
+    const newUser = await this.usersService.create({
+      email: body.email,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      password: hashedPassword,
+      role: body.role ?? Role.USER,
+      subAreaId: (body as any).subAreaId || undefined,
+    } as any);
 
-    // await this.logsService.createSuccessLog(
-    //   'REGISTER_USER',
-    //   newUser.id,
-    //   `Usuario registrado: ${newUser.email} con rol ${newUser.role}`,
-    // );
-
-    // const { password, ...result } = newUser;
-
-    // return result;
+    const { password, ...result } = newUser as any;
+    return result;
   }
 
   async login(body: LoginAuthDto) {
-    // const user = await this.usersService.findByEmailWithPassword(body.email);
-    //   if (!user) {
-    //     await this.logsService.createFailureLog(
-    //       'LOGIN',
-    //       undefined,
-    //       `Intento de login con email inexistente: ${body.email}`,
-    //     );
-    //     throw new UnauthorizedException('Credenciales inválidas');
-    // }
-    // const isPasswordValid = await bcrypt.compare(body.password, user.password);
-    // if (!isPasswordValid) {
-    //   await this.logsService.createFailureLog(
-    //     'LOGIN',
-    //     user.id,
-    //     `Intento de login con contraseña incorrecta: ${body.email}`,
-    //   );
-    //   throw new UnauthorizedException('Credenciales inválidas');
-    // }
-    // await this.logsService.createSuccessLog(
-    //   'LOGIN',
-    //   user.id,
-    //   `Usuario ${user.email} inició sesión exitosamente`,
-    // );
-    // const payload: TokenPayload = {
-    //   id: user.id,
-    //   role: user.role,
-    //   email: user.email,
-    // };
-    // return {
-    //   accessToken: this.generateToken(payload, 'auth'),
-    //   refreshToken: this.generateToken(payload, 'refresh'),
-    // };
+    const user = await this.usersService.findByEmailWithPassword(body.email);
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    const isPasswordValid = await bcrypt.compare(
+      body.password,
+      (user as any).password,
+    );
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const payload: TokenPayload = {
+      id: (user as any)._id.toString(),
+      role: (user as any).role,
+      email: (user as any).email,
+      firstName: (user as any).firstName,
+      lastName: (user as any).lastName,
+    } as any;
+
+    return {
+      accessToken: this.generateToken(payload, 'auth'),
+      refreshToken: this.generateToken(payload, 'refresh'),
+      user: {
+        id: payload.id,
+        email: payload.email,
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        role: payload.role,
+      },
+    };
   }
 
   logout() {
-    return { message: 'Sesión cerrada correctamente' };
+    return { message: 'Logged out' };
   }
 
   generateToken(
@@ -109,34 +94,29 @@ export class AuthService {
   }
 
   async refreshToken(refreshToken: string) {
-    // try {
-    //   const payload = jwt.verify(
-    //     refreshToken,
-    //     config.refresh.secret,
-    //   ) as Payload;
-    //   // const user = await this.usersService.findByEmail(payload.email);
-    //   if (!user) {
-    //     throw new UnauthorizedException('Token inválido o expirado');
-    //   }
-    //   const currentTime = Math.floor(Date.now() / 1000);
-    //   const timeToExpire = (payload.exp - currentTime) / 60;
-    //   const tokenPayload: TokenPayload = {
-    //     id: user.id,
-    //     role: user.role,
-    //     email: payload.email,
-    //   };
-    //   if (timeToExpire < 20) {
-    //     return {
-    //       accessToken: this.generateToken(tokenPayload, 'auth'),
-    //       refreshToken: this.generateToken(tokenPayload, 'refresh'),
-    //     };
-    //   }
-    //   return {
-    //     accessToken: this.generateToken(tokenPayload, 'auth'),
-    //   };
-    // } catch (error) {
-    //   throw new UnauthorizedException('Token inválido o expirado');
-    // }
+    try {
+      const payload = jwt.verify(
+        refreshToken,
+        config.refresh.secret,
+      ) as Payload;
+      const user = await this.usersService.findByEmail(payload.email);
+      if (!user) {
+        throw new UnauthorizedException('Invalid or expired token');
+      }
+      const tokenPayload: TokenPayload = {
+        id: (user as any)._id.toString(),
+        role: (user as any).role,
+        email: (user as any).email,
+        firstName: (user as any).firstName,
+        lastName: (user as any).lastName,
+      } as any;
+      return {
+        accessToken: this.generateToken(tokenPayload, 'auth'),
+        refreshToken: this.generateToken(tokenPayload, 'refresh'),
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
   }
 
   getPayload(token: string, type: 'auth' | 'refresh' = 'auth'): Payload {
@@ -144,21 +124,17 @@ export class AuthService {
   }
 
   async sendPasswordResetEmail(email: string) {
-    // const user = await this.usersService.findByEmail(email);
-    // if (!user) return;
-    // const token = this.generateToken({ email }, 'reset');
-    // const resetLink = `https://localhost:3000/api/auth/reset-password?token=${token}`;
-    // await this.mailService.send({
-    //   to: email,
-    //   subject: 'Recuperación de contraseña',
-    //   html: `<p>Haz clic <a href="${resetLink}">aquí</a> para restablecer tu contraseña.</p>`,
-    // });
+    // implementation omitted
   }
 
-  async validateToken(token: string) {
+  async validateToken(
+    token: string | undefined,
+    type: 'auth' | 'refresh' | 'reset' = 'auth',
+  ) {
     try {
-      const payload = jwt.verify(token, config.reset.secret) as Payload;
-      return { valid: true, email: payload.email };
+      if (!token) return { valid: false };
+      const payload = jwt.verify(token, config[type].secret) as Payload;
+      return { valid: true, payload };
     } catch (error) {
       return { valid: false };
     }

@@ -7,5 +7,6 @@ import { MongooseSchemasModule } from '../mongoose/mongoose-schemas.module';
   imports: [MongooseSchemasModule],
   controllers: [UsersController],
   providers: [UsersService],
+  exports: [UsersService],
 })
 export class UsersModule {}
