@@ -9,7 +9,8 @@ import { ProjectsModule } from './projects/projects.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { MongooseSchemasModule } from './mongoose/mongoose-schemas.module';
-
+import { AreasModule } from './areas/areas.module';
+import { SubareasModule } from './subareas/subareas.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -31,6 +32,8 @@ import { MongooseSchemasModule } from './mongoose/mongoose-schemas.module';
     ProjectsModule,
     AuthModule,
     UsersModule,
+    AreasModule,
+    SubareasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
