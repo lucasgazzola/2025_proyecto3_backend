@@ -1,46 +1,58 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { User, UserDocument } from '../mongoose/schemas/user.schema';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { USER_REPOSITORY} from './repositories/user.repository.interface';
+import type { IUserRepository } from './repositories/user.repository.interface';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @Inject(USER_REPOSITORY)
+    private readonly repository: IUserRepository,
+  ) {}
 
   async create(createUserDto: CreateUserDto) {
-    const created = new this.userModel(createUserDto as any);
-    return created.save();
+    return this.repository.create(createUserDto);
   }
 
   async findAll() {
-    return this.userModel.find().exec();
+    return this.repository.findAll();
   }
 
   async findOne(id: string) {
-    if (!Types.ObjectId.isValid(id))
-      throw new NotFoundException('User not found');
-    return this.userModel.findById(id).exec();
+
+    const user = await this.repository.findById(id);
+
+    if (!user) throw new NotFoundException('User not found');
+
+    return user;
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
-    return this.userModel
-      .findByIdAndUpdate(id, updateUserDto as any, { new: true })
-      .exec();
+    
+    const user = await this.repository.update(id, updateUserDto);
+
+    if (!user) throw new NotFoundException('User not found');
+
+    return user;
   }
 
   async remove(id: string) {
-    return this.userModel.findByIdAndDelete(id).exec();
+
+    const user = await this.repository.delete(id);
+
+    if (!user) throw new NotFoundException('User not found');
+
+    return user;
   }
 
   async findByEmail(email: string) {
-    return this.userModel.findOne({ email }).exec();
+    return this.repository.findByEmail(email);
   }
 
   async findByEmailWithPassword(email: string) {
     // ensure password field is selectable: if schema uses select: false,
     // we include it explicitly; otherwise this returns the same as findByEmail
-    return this.userModel.findOne({ email }).exec();
+    return this.repository.findByEmailWithPassword(email);
   }
 }
