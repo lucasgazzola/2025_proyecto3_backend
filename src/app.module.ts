@@ -7,6 +7,7 @@ import { ClaimsModule } from './claims/claims.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ProjectsModule } from './projects/projects.module';
 import { UsersModule } from './users/users.module';
+import { AreasModule } from './areas/areas.module';
 import { AuthModule } from './auth/auth.module';
 import { MongooseSchemasModule } from './mongoose/mongoose-schemas.module';
 
@@ -31,6 +32,7 @@ import { MongooseSchemasModule } from './mongoose/mongoose-schemas.module';
     ProjectsModule,
     AuthModule,
     UsersModule,
+    AreasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
