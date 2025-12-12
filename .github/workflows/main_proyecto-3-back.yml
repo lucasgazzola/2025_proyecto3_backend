@@ -9,15 +9,15 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write         # Necesario para OIDC
+      id-token: write     # necesario para OIDC
       contents: read
 
     steps:
-      # 1. Checkout del código
+      # 1. Checkout
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Login a Azure con OIDC (recomendado por Microsoft)
+      # 2. Azure Login via OIDC (correcto)
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -26,7 +26,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # 3. Configurar Node
+      # 3. Node
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -37,33 +37,33 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      # 5. Prisma: generar cliente
+      # 5. Prisma generate
       - name: Prisma generate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npx prisma generate
 
-      # 6. Prisma: aplicar migraciones en producción
+      # 6. Prisma migrate deploy
       - name: Prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npx prisma migrate deploy
 
-      # 7. Compilar NestJS
+      # 7. Build NestJS
       - name: Build project
         run: npm run build
 
-      # 8. Comprimir artefacto para deploy (mejor performance)
+      # 8. Crear ZIP de deployment
       - name: Prepare deployment package
-        run: zip -r release.zip . -x ".git/*" "node_modules/*"
+        run: zip -r release.zip . -x "node_modules/*" ".git/*" "tmp/*"
 
-      # 9. Deploy al Azure Web App
+      # 9. Azure WebApp Deploy
       - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v3
         with:
           app-name: 2025-proyecto2-back-gdv
           package: release.zip
 
-      # 10. Pequeña espera opcional
+      # 10. Espera
       - name: Wait a bit
         run: sleep 10
