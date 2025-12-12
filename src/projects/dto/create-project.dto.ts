@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { ProjectType } from '../../common/enums/projects.enums';
 
@@ -13,6 +13,6 @@ export class CreateProjectDto {
   description?: string;
 
   @ApiProperty({ example: ProjectType.TECHNOLOGY, enum: ProjectType })
-  @IsString()
-  projectType: string;
+  @IsEnum(ProjectType)
+  projectType: ProjectType;
 }
