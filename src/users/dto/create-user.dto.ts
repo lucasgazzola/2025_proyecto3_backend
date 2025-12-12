@@ -34,5 +34,5 @@ export class CreateUserDto {
     description: 'SubArea ObjectId as string',
   })
   @IsString()
-  subAreaId: string;
+  subArea: string;
 }
