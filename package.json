@@ -29,7 +29,7 @@
     "bcrypt": "^6.0.0",
     "class-validator": "^0.14.3",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^9.0.1",
+    "mongoose": "^8.20.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "swagger-ui-express": "^5.0.1"

@@ -30,9 +30,9 @@ export class User {
   @Prop()
   deletedAt?: Date;
 
-  // @Prop({ type: Types.ObjectId, ref: 'SubArea', required: true })
-  // subArea: Types.ObjectId;
-
+  @Prop({ type: Types.ObjectId, ref: 'SubArea', required: false, default: null })
+  subArea: Types.ObjectId;
+ 
   @Prop({ type: String, enum: Object.values(RoleEnum), default: RoleEnum.USER })
   role: RoleEnum;
 
