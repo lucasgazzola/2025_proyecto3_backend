@@ -1,5 +1,5 @@
 import { User } from "../user.entity";
-import { UserMapper } from "../mappers/user.mongo.mapper";
+import { UserMapper, UserDomain } from "../mappers/user.mongo.mapper";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { UserDocument } from "src/mongoose/schemas/user.schema";
@@ -12,19 +12,22 @@ export class UserRepository implements UserRepository{
         @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     ){}
 
-    async create(data: CreateUserDto): Promise<User> {
+    async create(data: CreateUserDto): Promise<UserDomain> {
         const created = new this.userModel(data);
-
-        return UserMapper.toDomain(await created.save());
+        const saved = await created.save();
+        const domain = UserMapper.toDomain(saved);
+        // Al crear, no esperamos null; si ocurre, lanzamos error lógico
+        if (!domain) throw new Error('Failed to map created user');
+        return domain;
     }
 
-    async findAll(): Promise<User[]> {
+    async findAll(): Promise<UserDomain[]> {
         const users = await this.userModel.find().exec();
 
-        return users.map(UserMapper.toDomain);
+        return users.map((u) => UserMapper.toDomain(u)!).filter(Boolean);
     }
 
-    async findById(id: string): Promise<User | null> {
+    async findById(id: string): Promise<UserDomain | null> {
 
         if (!Types.ObjectId.isValid(id))
             return null;
@@ -34,26 +37,27 @@ export class UserRepository implements UserRepository{
         return UserMapper.toDomain(user);
     }
 
-    async findByEmail(email: string): Promise<User | null> {
+    async findByEmail(email: string): Promise<UserDomain | null> {
 
         const user = await this.userModel.findOne({ email }).exec();
 
         return UserMapper.toDomain(user);
     }
 
-    async findByEmailWithPassword(email: string): Promise<User | null> {
+    async findByEmailWithPassword(email: string): Promise<UserDomain | null> {
 
         const user = await this.userModel.findOne({ email }).select('+password').exec();
 
         return UserMapper.toDomain(user);
     }
 
-    async update(id: string, data: any): Promise<any> {
+    async update(id: string, data: Partial<UserDocument>): Promise<UserDomain | null> {
 
-        return this.userModel.findByIdAndUpdate(id, data, { new: true }).exec();
+        const updated = await this.userModel.findByIdAndUpdate(id, data, { new: true }).exec();
+        return UserMapper.toDomain(updated);
     }
 
-    async delete(id: string): Promise<any> {
+    async delete(id: string): Promise<UserDomain | null> {
 
         const user = await this.userModel.findOneAndUpdate(
             { _id: id },

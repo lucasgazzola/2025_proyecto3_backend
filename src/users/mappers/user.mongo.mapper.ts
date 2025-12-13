@@ -3,39 +3,52 @@ import { Role } from "src/common/enums/roles.enums";
 import { UpdateUserDto } from "../dto/update-user.dto";
 import { Types } from "mongoose";
 
+export type UserDomain = {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    role: RoleEnum;
+    subArea?: Types.ObjectId | null;
+    createdAt?: Date;
+    updatedAt?: Date;
+    deletedAt?: Date;
+};
+
 export class UserMapper {
-    
-    static toDomain(user: any): any | null {
+
+        static toDomain(user: UserDocument | null): UserDomain | null {
 
         if (user == null || user == undefined) return null;
-        
+
         return {
-            id: user._id?.toString(),
+            id: user._id.toString(),
             firstName: user.firstName,
             lastName: user.lastName,
             email: user.email,
             phone: user.phone,
             role: user.role,
-            subArea: user.subArea,
-            fechaRegistro: user.fechaRegistro,
+            subArea: user.subArea ?? null,
+            createdAt: user.createdAt,
             deletedAt: user.deletedAt
         };
     }
 
-    static toCreatePersistance(user: any): any {
+    static toCreatePersistance(user: Partial<UserDomain> & { password: string }): Partial<UserDocument> {
         return {
             firstName: user.firstName,
             lastName: user.lastName,
             email: user.email,
             password: user.password,
             phone: user.phone,
-            role: user.role ?? Role.USER,
+            role: (user.role as RoleEnum) ?? Role.USER,
             subArea: user.subArea ?? undefined
         };
     }
 
-    static toUpdatePersistance(dto: UpdateUserDto): any {
-        
+    static toUpdatePersistance(dto: UpdateUserDto): Partial<UserDocument> {
+
         const data: Partial<UserDocument> = {};
 
         if (dto.firstName) data.firstName = dto.firstName;

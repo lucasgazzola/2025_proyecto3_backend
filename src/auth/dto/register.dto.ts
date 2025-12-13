@@ -1,13 +1,11 @@
 import {
   IsEmail,
-  IsEnum,
   IsString,
   MinLength,
   IsOptional,
   Matches,
   IsNotEmpty,
 } from 'class-validator';
-import { Role } from '../../common/enums/roles.enums';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterAuthDto {
@@ -44,9 +42,4 @@ export class RegisterAuthDto {
   @IsNotEmpty({ message: 'La confirmación de contraseña no puede estar vacía' })
   @IsString()
   confirmPassword: string;
-
-  @ApiProperty({ example: Role.USER, enum: Role, required: false })
-  @IsEnum(Role)
-  @IsOptional()
-  role?: Role;
 }
