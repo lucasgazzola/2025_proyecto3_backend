@@ -35,6 +35,12 @@ export class ClaimStateHistory {
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   user: Types.ObjectId;
+
+  @Prop()
+  createdAt?: Date;
+
+  @Prop()
+  updatedAt?: Date;
 }
 
 export const ClaimStateHistorySchema = SchemaFactory.createForClass(ClaimStateHistory);
