@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { ClaimPriorityEnum, ClaimCriticalityEnum } from './claim.schema';
 
 export type ClaimStateHistoryDocument = ClaimStateHistory & Document;
 
@@ -32,6 +33,12 @@ export class ClaimStateHistory {
 
   @Prop({ type: String, enum: Object.values(ClaimStatusEnum), required: true })
   claimState: ClaimStatusEnum;
+
+  @Prop({ type: String, enum: Object.values(ClaimPriorityEnum), required: true })
+  priority: ClaimPriorityEnum;
+
+  @Prop({ type: String, enum: Object.values(ClaimCriticalityEnum), required: true })
+  severity: ClaimCriticalityEnum;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   user: Types.ObjectId;
