@@ -136,7 +136,7 @@ async function run() {
 
   // Claims
   const priorities = Object.values(ClaimPriorityEnum);
-  const severities = Object.values(ClaimCriticalityEnum);
+  const criticalities = Object.values(ClaimCriticalityEnum);
   const claimTypes = Object.values(ClaimTypeEnum);
   const claimsCreated: Types.ObjectId[] = [];
   for (let i = 0; i < 120; i++) {
@@ -150,7 +150,7 @@ async function run() {
       project,
       user,
       priority: rand(priorities),
-      severity: rand(severities),
+      criticality: rand(criticalities),
       claimType: rand(claimTypes),
       area: area._id,
       file,
