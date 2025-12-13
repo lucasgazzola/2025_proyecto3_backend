@@ -10,7 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -18,15 +19,15 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      # 1. Instalar TODAS las deps necesarias para runtime
+      - name: Install production dependencies
+        run: npm ci --omit=dev --legacy-peer-deps
 
+      # 2. Build NestJS
       - name: Build project
         run: npm run build
 
-      - name: Remove node_modules before deploy
-        run: rm -rf node_modules
-
+      # 3. Deploy TODO (incluye node_modules)
       - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v3
         with:
