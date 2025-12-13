@@ -19,28 +19,52 @@ export class AuthService {
   constructor(private readonly usersService: UsersService) {}
 
   async register(body: RegisterAuthDto) {
-    const userExists = await this.usersService.findByEmail(body.email);
-    if (userExists) {
-      throw new HttpException('Email already registered', 400);
+    try {
+      const userExists = await this.usersService.findByEmail(body.email);
+      if (userExists) {
+        throw new HttpException('Email already registered', 400);
+      }
+
+      const pass = (body as any).password;
+      const confirm = (body as any).confirmPassword;
+      if (typeof pass === 'undefined' || typeof confirm === 'undefined') {
+        throw new HttpException('Password and confirmPassword are required', 400);
+      }
+      if (String(pass).trim() !== String(confirm).trim()) {
+        throw new HttpException('Passwords do not match', 400);
+      }
+
+      // debug: log attempt (do not include raw password/hash)
+      // eslint-disable-next-line no-console
+      console.debug('AuthService.register: attempt', {
+        email: body.email,
+        hasPassword: !!pass,
+      });
+
+      const hashedPassword = await bcrypt.hash(body.password, 10);
+
+      const newUser = await this.usersService.create({
+        email: body.email,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        password: hashedPassword,
+        role: body.role ?? Role.USER,
+        subAreaId: (body as any).subAreaId || undefined,
+      } as any);
+
+      // eslint-disable-next-line no-console
+      console.debug('AuthService.register: created', {
+        id: (newUser as any)?.id ?? null,
+        email: (newUser as any)?.email ?? body.email,
+      });
+
+      const { password, ...result } = newUser as any;
+      return result;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('AuthService.register: error', err?.message || err);
+      throw err;
     }
-
-    if ((body as any).password !== (body as any).confirmPassword) {
-      throw new HttpException('Passwords do not match', 400);
-    }
-
-    const hashedPassword = await bcrypt.hash(body.password, 10);
-
-    const newUser = await this.usersService.create({
-      email: body.email,
-      firstName: body.firstName,
-      lastName: body.lastName,
-      password: hashedPassword,
-      role: body.role ?? Role.USER,
-      subAreaId: (body as any).subAreaId || undefined,
-    } as any);
-
-    const { password, ...result } = newUser as any;
-    return result;
   }
 
   async login(body: LoginAuthDto) {
@@ -48,16 +72,50 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const isPasswordValid = await bcrypt.compare(
-      body.password,
-      (user as any).password,
-    );
+    // Defensive checks & logging for debugging authentication issues
+    let isPasswordValid = false;
+    try {
+      const stored = (user as any).password;
+      const hasPassword = typeof stored !== 'undefined' && stored !== null;
+      // log minimal info for debugging (do NOT log the actual hash)
+      // eslint-disable-next-line no-console
+      console.debug('AuthService.login: user found', {
+        email: (user as any).email,
+        hasPassword,
+        passwordLength: hasPassword ? String(stored).length : 0,
+      });
+
+      if (!hasPassword) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+
+      isPasswordValid = await bcrypt.compare(String(body.password), String(stored));
+
+      if (!isPasswordValid) {
+        // optional debug log for mismatch
+        // eslint-disable-next-line no-console
+        console.debug('AuthService.login: password mismatch for', {
+          email: (user as any).email,
+        });
+        throw new UnauthorizedException('Invalid credentials');
+      }
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
+      // eslint-disable-next-line no-console
+      console.error('AuthService.login: bcrypt error', err);
+      throw new UnauthorizedException('Invalid credentials');
+    }
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    const resolvedId = (user as any).id ?? (user as any)._id?.toString();
+    if (!resolvedId) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     const payload: TokenPayload = {
-      id: (user as any)._id.toString(),
+      id: resolvedId,
       role: (user as any).role,
       email: (user as any).email,
       firstName: (user as any).firstName,
