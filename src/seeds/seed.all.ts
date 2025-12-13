@@ -1,4 +1,5 @@
 import mongoose, { Types } from 'mongoose';
+import bcrypt from 'bcrypt';
 import { ConfigModule } from '@nestjs/config';
 import { AreaSchema, Area } from '../mongoose/schemas/area.schema';
 import { SubAreaSchema, SubArea } from '../mongoose/schemas/subarea.schema';
@@ -85,8 +86,8 @@ async function run() {
   const subareas = await SubAreaModel.find().lean();
 
   // Users
-  const firstNames = ['Lucas', 'Ana', 'María', 'Juan', 'Sofía', 'Diego', 'Carla', 'Pedro', 'Florencia', 'Martín'];
-  const lastNames = ['García', 'Fernández', 'Gómez', 'Rodríguez', 'López', 'Martínez', 'Pérez', 'Sánchez', 'Romero', 'Alonso'];
+  const firstNames = ['Lucas', 'Ana', 'Maria', 'Juan', 'Sofia', 'Diego', 'Carla', 'Pedro', 'Florencia', 'Martin'];
+  const lastNames = ['Garcia', 'Fernandez', 'Gomez', 'Rodriguez', 'Lopez', 'Martinez', 'Perez', 'Sanchez', 'Romero', 'Alonso'];
   const roles = [RoleEnum.USER, RoleEnum.CUSTOMER, RoleEnum.AUDITOR, RoleEnum.ADMIN];
   const usersCreated: Types.ObjectId[] = [];
   for (let i = 0; i < 80; i++) {
@@ -94,11 +95,13 @@ async function run() {
     const email = `${fn}.${ln}.${i}@example.com`.toLowerCase();
     const role = rand(roles);
     const sub = rand(subareas);
+    const plain = 'Password123!';
+    const hashed = await bcrypt.hash(plain, 10);
     const user = await UserModel.create({
       firstName: fn,
       lastName: ln,
       email,
-      password: 'Password123!',
+      password: hashed,
       phone: `+54 9 11 ${Math.floor(10000000 + Math.random()*89999999)}`,
       role,
       subArea: sub?._id ?? null,

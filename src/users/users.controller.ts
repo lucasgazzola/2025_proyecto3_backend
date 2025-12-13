@@ -6,16 +6,29 @@ import {
   Patch,
   Param,
   Delete,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/auth-roles.guard';
 
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiResponse({ status: 200, description: 'Current user object' })
+  async profile(@Req() req: any) {
+    const email = req?.user?.email;
+    if (!email) return null;
+    return this.usersService.findByEmail(email);
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new user' })

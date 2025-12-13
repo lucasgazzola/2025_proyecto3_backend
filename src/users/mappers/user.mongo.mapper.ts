@@ -22,6 +22,26 @@ export class UserMapper {
         };
     }
 
+    // Similar to toDomain but includes the password field (for internal use only,
+    // e.g. authentication flow). Keep this separate so public API objects don't
+    // accidentally leak the hash.
+    static toDomainWithPassword(user: any): any | null {
+        if (user == null || user == undefined) return null;
+
+        return {
+            id: user._id?.toString(),
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            subArea: user.subArea,
+            fechaRegistro: user.fechaRegistro,
+            deletedAt: user.deletedAt,
+            password: (user as any).password,
+        };
+    }
+
     static toCreatePersistance(user: any): any {
         return {
             firstName: user.firstName,
