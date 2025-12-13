@@ -6,16 +6,20 @@ import {
   Patch,
   Param,
   Delete,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ClaimsService } from './claims.service';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { UseGuards, Body as BodyDec } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/auth-roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { Role } from 'src/common/enums/roles.enums';
 
 @ApiTags('claims')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth('jwt')
 @Controller('claims')
 export class ClaimsController {
   constructor(private readonly claimsService: ClaimsService) {}
@@ -25,11 +29,9 @@ export class ClaimsController {
   @ApiBody({ type: CreateClaimDto })
   @ApiResponse({ status: 201, description: 'Claim created' })
   create(@CurrentUser() user: any, @Body() createClaimDto: CreateClaimDto) {
-    console.log({user})
-    return this.claimsService.create(createClaimDto, user.id || user._id);
+    return this.claimsService.create(createClaimDto, user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get()
   @ApiOperation({ summary: 'List all claims' })
   @ApiResponse({ status: 200, description: 'Array of claims' })
@@ -48,7 +50,13 @@ export class ClaimsController {
   @ApiOperation({ summary: 'Update a claim' })
   @ApiBody({ type: UpdateClaimDto })
   @ApiResponse({ status: 200, description: 'Updated claim object' })
-  update(@Param('id') id: string, @Body() updateClaimDto: UpdateClaimDto) {
+  update(@CurrentUser() user: any, @Param('id') id: string, @Body() updateClaimDto: UpdateClaimDto) {
+    console.log({user})
+
+    if (user.role !== Role.USER) {
+      throw new UnauthorizedException('Only users with USER role can update claims');
+    }
+
     return this.claimsService.updateWithHistory(id, updateClaimDto);
   }
 

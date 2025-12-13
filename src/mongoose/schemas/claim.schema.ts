@@ -45,13 +45,13 @@ export class Claim {
   priority: ClaimPriorityEnum;
 
   @Prop({ type: String, enum: Object.values(ClaimCriticalityEnum), required: true })
-  severity: ClaimCriticalityEnum;
+  criticality: ClaimCriticalityEnum;
 
   @Prop({ type: String, enum: Object.values(ClaimTypeEnum), required: true })
   claimType: ClaimTypeEnum;
 
-  @Prop({ type: Types.ObjectId, ref: 'Area', required: true })
-  area: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Area', required: false })
+  area?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'File' })
   file?: Types.ObjectId;

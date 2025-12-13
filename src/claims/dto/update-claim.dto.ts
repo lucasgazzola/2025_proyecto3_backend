@@ -1,30 +1,29 @@
-import { PartialType } from '@nestjs/swagger';
+import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { CreateClaimDto } from './create-claim.dto';
 import { ClaimStatus } from '../../common/enums/claims.enums';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 
 export class UpdateClaimDto extends PartialType(CreateClaimDto) {
-	@IsOptional()
+	@ApiProperty({ example: ClaimStatus.IN_PROGRESS, required: false, enum: ClaimStatus })
+  @IsOptional()
 	@IsEnum(ClaimStatus)
 	claimStatus?: ClaimStatus;
 
-	@IsOptional()
+  @ApiProperty({ example: 'Website for client X', required: true })
 	@IsString()
-	actions?: string;
+	actions: string;
 
+  @ApiProperty({ example: 'Frontend', required: false })
 	@IsOptional()
 	@IsString()
 	area?: string;
 
+  @ApiProperty({ example: 'UI', required: false })
 	@IsOptional()
 	@IsString()
 	subarea?: string;
 
-	@IsOptional()
-	@IsString()
-	project?: string;
-
-
+  @ApiProperty({ example: 'Final resolution details', required: false })
   @IsOptional()
   @IsString()
   finalResolution?: string;

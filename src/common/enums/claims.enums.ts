@@ -2,7 +2,6 @@ export enum ClaimStatus {
   PENDING = 'PENDING',
   IN_PROGRESS = 'IN_PROGRESS',
   RESOLVED = 'RESOLVED',
-  CLOSED = 'CLOSED',
 }
 
 export enum ClaimPriority {

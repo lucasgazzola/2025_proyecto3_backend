@@ -32,13 +32,13 @@ export class ClaimStateHistory {
   claim: Types.ObjectId;
 
   @Prop({ type: String, enum: Object.values(ClaimStatusEnum), required: true })
-  claimState: ClaimStatusEnum;
+  claimStatus: ClaimStatusEnum;
 
   @Prop({ type: String, enum: Object.values(ClaimPriorityEnum), required: true })
   priority: ClaimPriorityEnum;
 
   @Prop({ type: String, enum: Object.values(ClaimCriticalityEnum), required: true })
-  severity: ClaimCriticalityEnum;
+  criticality: ClaimCriticalityEnum;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   user: Types.ObjectId;
