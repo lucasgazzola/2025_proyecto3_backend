@@ -48,7 +48,7 @@ export class UserRepository implements UserRepository{
 
         const user = await this.userModel.findOne({ email }).select('+password').exec();
 
-        return UserMapper.toDomain(user);
+        return UserMapper.toDomainWithPassword(user);
     }
 
     async update(id: string, data: Partial<UserDocument>): Promise<UserDomain | null> {

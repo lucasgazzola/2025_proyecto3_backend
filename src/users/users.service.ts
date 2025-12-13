@@ -3,6 +3,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { USER_REPOSITORY} from './repositories/user.repository.interface';
 import type { IUserRepository } from './repositories/user.repository.interface';
+import { Role } from 'src/common/enums/roles.enums';
 
 @Injectable()
 export class UsersService {
@@ -12,6 +13,10 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto) {
+    if (!createUserDto.role) {
+      // Si no envían rol, es CUSTOMER
+      createUserDto.role = Role.CUSTOMER;
+    }
     return this.repository.create(createUserDto);
   }
 
@@ -29,7 +34,7 @@ export class UsersService {
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
-    
+
     const user = await this.repository.update(id, updateUserDto);
 
     if (!user) throw new NotFoundException('User not found');
@@ -39,11 +44,8 @@ export class UsersService {
 
   async remove(id: string) {
 
-    const user = await this.repository.delete(id);
+    await this.repository.delete(id);
 
-    if (!user) throw new NotFoundException('User not found');
-
-    return user;
   }
 
   async findByEmail(email: string) {
@@ -51,8 +53,6 @@ export class UsersService {
   }
 
   async findByEmailWithPassword(email: string) {
-    // ensure password field is selectable: if schema uses select: false,
-    // we include it explicitly; otherwise this returns the same as findByEmail
     return this.repository.findByEmailWithPassword(email);
   }
 }

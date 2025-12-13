@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   HttpException,
+  Logger,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { RegisterAuthDto } from './dto/register.dto';
@@ -30,39 +31,37 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(body.password, 10);
 
-    const newUser = await this.usersService.create({
-      email: body.email,
-      firstName: body.firstName,
-      lastName: body.lastName,
-      password: hashedPassword,
-      role: Role.CUSTOMER,
-      subAreaId: (body as any).subAreaId || undefined,
-    } as any);
+      const newUser = await this.usersService.create({
+        email: body.email,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        password: hashedPassword,
+        role: Role.CUSTOMER,
+      });
 
     const { password, ...result } = newUser as any;
     return result;
   }
 
   async login(body: LoginAuthDto) {
+
     const user = await this.usersService.findByEmailWithPassword(body.email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const isPasswordValid = await bcrypt.compare(
-      body.password,
-      (user as any).password,
-    );
+
+    const isPasswordValid = await bcrypt.compare(body.password, user.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const payload: TokenPayload = {
-      id: (user as any)._id.toString(),
-      role: (user as any).role,
-      email: (user as any).email,
-      firstName: (user as any).firstName,
-      lastName: (user as any).lastName,
-    } as any;
+      id: user.id,
+      role: user.role,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    };
 
     return {
       accessToken: this.generateToken(payload, 'auth'),

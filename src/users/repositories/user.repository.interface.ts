@@ -11,5 +11,6 @@ export interface IUserRepository {
   update(id: string, data: any): Promise<UserDomain | null>;
   delete(id: string): Promise<void>;
   findByEmail(email: string): Promise<UserDomain | null>;
+  findByEmailWithPassword(email: string): Promise<any | null>;
   updatePassword(userId: string, hashedPassword: string): Promise<void>;
 }
