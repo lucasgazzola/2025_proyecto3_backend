@@ -91,13 +91,11 @@ export class AuthService {
     return {
       accessToken: this.generateToken(payload, 'auth'),
       refreshToken: this.generateToken(payload, 'refresh'),
-      user: {
-        id: payload.id,
-        email: payload.email,
-        firstName: payload.firstName,
-        lastName: payload.lastName,
-        role: payload.role,
-      },
+      id: payload.id,
+      email: payload.email,
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      role: payload.role,
     };
   }
 
