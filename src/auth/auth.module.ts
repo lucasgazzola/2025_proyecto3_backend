@@ -6,7 +6,7 @@ import { RolesGuard } from './roles.guard';
 import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [UsersModule],
+  imports: [forwardRef(() => UsersModule)],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, RolesGuard],
   exports: [AuthService, JwtAuthGuard, RolesGuard],
