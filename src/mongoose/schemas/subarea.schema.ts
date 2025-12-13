@@ -19,6 +19,12 @@ export class SubArea {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Claim' }], default: [] })
   claims: Types.ObjectId[];
+
+  @Prop()
+  createdAt?: Date;
+
+  @Prop()
+  updatedAt?: Date;
 }
 
 export const SubAreaSchema = SchemaFactory.createForClass(SubArea);
