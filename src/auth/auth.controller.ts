@@ -8,6 +8,7 @@ import {
   Get,
   UseGuards,
   Req,
+  Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
@@ -15,12 +16,16 @@ import { AuthService } from './auth.service';
 import { RegisterAuthDto } from './dto/register.dto';
 import { LoginAuthDto } from './dto/login.dto';
 import { JwtAuthGuard } from './auth-roles.guard';
+import { Public } from './public.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('register')
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User registered successfully' })
@@ -30,6 +35,7 @@ export class AuthController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Public()
   @Post('login')
   @ApiOperation({ summary: 'Login and receive access and refresh tokens' })
   @ApiResponse({

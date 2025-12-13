@@ -7,6 +7,7 @@ import { ClaimStateHistory, ClaimStateHistorySchema } from './schemas/claim-stat
 import { File, FileSchema } from './schemas/file.schema';
 import { Area, AreaSchema } from './schemas/area.schema';
 import { SubArea, SubAreaSchema } from './schemas/subarea.schema';
+import { ClaimMessage, ClaimMessageSchema } from './schemas/claim-message.schema';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { SubArea, SubAreaSchema } from './schemas/subarea.schema';
       { name: File.name, schema: FileSchema },
       { name: Area.name, schema: AreaSchema },
       { name: SubArea.name, schema: SubAreaSchema },
+      { name: ClaimMessage.name, schema: ClaimMessageSchema },
     ]),
   ],
   exports: [MongooseModule],

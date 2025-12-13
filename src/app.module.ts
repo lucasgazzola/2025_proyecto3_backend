@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -9,6 +10,8 @@ import { ProjectsModule } from './projects/projects.module';
 import { UsersModule } from './users/users.module';
 import { AreasModule } from './areas/areas.module';
 import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/auth-roles.guard';
+import { RolesGuard } from './auth/roles.guard';
 import { MongooseSchemasModule } from './mongoose/mongoose-schemas.module';
 
 @Module({
@@ -35,6 +38,10 @@ import { MongooseSchemasModule } from './mongoose/mongoose-schemas.module';
     AreasModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
 export class AppModule {}

@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   HttpException,
+  Logger,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { RegisterAuthDto } from './dto/register.dto';
@@ -43,14 +44,13 @@ export class AuthService {
 
       const hashedPassword = await bcrypt.hash(body.password, 10);
 
-    const newUser = await this.usersService.create({
-      email: body.email,
-      firstName: body.firstName,
-      lastName: body.lastName,
-      password: hashedPassword,
-      role: Role.CUSTOMER,
-      subAreaId: (body as any).subAreaId || undefined,
-    } as any);
+      const newUser = await this.usersService.create({
+        email: body.email,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        password: hashedPassword,
+        role: Role.CUSTOMER,
+      });
 
       const { password, ...result } = newUser as any;
       return result;
@@ -62,43 +62,15 @@ export class AuthService {
   }
 
   async login(body: LoginAuthDto) {
+
     const user = await this.usersService.findByEmailWithPassword(body.email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    // Defensive checks & logging for debugging authentication issues
-    let isPasswordValid = false;
-    try {
-      const stored = (user as any).password;
-      const hasPassword = typeof stored !== 'undefined' && stored !== null;
-      // log minimal info for debugging (do NOT log the actual hash)
-      // eslint-disable-next-line no-console
-      console.debug('AuthService.login: user found', {
-        email: (user as any).email,
-        hasPassword,
-        passwordLength: hasPassword ? String(stored).length : 0,
-      });
-
-      if (!hasPassword) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      isPasswordValid = await bcrypt.compare(String(body.password), String(stored));
-
-      if (!isPasswordValid) {
-        // optional debug log for mismatch
-        // eslint-disable-next-line no-console
-        console.debug('AuthService.login: password mismatch for', {
-          email: (user as any).email,
-        });
-        throw new UnauthorizedException('Invalid credentials');
-      }
-    } catch (err) {
-      if (err instanceof UnauthorizedException) throw err;
-      // eslint-disable-next-line no-console
-      console.error('AuthService.login: bcrypt error', err);
-      throw new UnauthorizedException('Invalid credentials');
-    }
+    const isPasswordValid = await bcrypt.compare(
+      body.password,
+      (user as any).password,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -109,7 +81,7 @@ export class AuthService {
     }
 
     const payload: TokenPayload = {
-      id: resolvedId,
+      id: (user as any)._id.toString(),
       role: (user as any).role,
       email: (user as any).email,
       firstName: (user as any).firstName,
