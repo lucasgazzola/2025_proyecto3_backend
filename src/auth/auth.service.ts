@@ -48,7 +48,7 @@ export class AuthService {
         firstName: body.firstName,
         lastName: body.lastName,
         password: hashedPassword,
-        role: body.role ?? Role.USER,
+        role: Role.CUSTOMER,
         subAreaId: (body as any).subAreaId || undefined,
       } as any);
 
