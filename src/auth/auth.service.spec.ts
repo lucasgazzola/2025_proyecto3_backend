@@ -255,7 +255,7 @@ describe('AuthService (unit)', () => {
         password: 'hashed',
       });
 
-      const result = await authService.register(dto as any);
+      const result = await authService.register(dto);
       expect(result).toHaveProperty('email', dto.email);
     });
   });

@@ -16,9 +16,13 @@ export type UserDomain = {
     deletedAt?: Date;
 };
 
+export type UserDomainWithPassword = UserDomain & {
+    password: string;
+};
+
 export class UserMapper {
 
-        static toDomain(user: UserDocument | null): UserDomain | null {
+    static toDomain(user: UserDocument | null): UserDomain | null {
 
         if (user == null || user == undefined) return null;
 
@@ -27,6 +31,24 @@ export class UserMapper {
             firstName: user.firstName,
             lastName: user.lastName,
             email: user.email,
+            phone: user.phone,
+            role: user.role,
+            subArea: user.subArea ?? null,
+            createdAt: user.createdAt,
+            deletedAt: user.deletedAt
+        };
+    }
+
+    static toDomainWithPassword(user: UserDocument | null): UserDomainWithPassword | null {
+
+        if (user == null || user == undefined) return null;
+
+        return {
+            id: user._id.toString(),
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            password: user.password,
             phone: user.phone,
             role: user.role,
             subArea: user.subArea ?? null,

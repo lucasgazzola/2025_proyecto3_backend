@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { ClaimsService } from './claims.service';
 import { ClaimsController } from './claims.controller';
 import { MongooseSchemasModule } from '../mongoose/mongoose-schemas.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [MongooseSchemasModule],
+  imports: [MongooseSchemasModule, AuthModule],
   controllers: [ClaimsController],
   providers: [ClaimsService],
 })
