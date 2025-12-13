@@ -58,6 +58,12 @@ export class Claim {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'ClaimStateHistory' }], default: [] })
   history: Types.ObjectId[];
+
+  @Prop()
+  createdAt?: Date;
+
+  @Prop()
+  updatedAt?: Date;
 }
 
 export const ClaimSchema = SchemaFactory.createForClass(Claim);

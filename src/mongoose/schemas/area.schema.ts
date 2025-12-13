@@ -13,6 +13,12 @@ export class Area {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'SubArea' }], default: [] })
   subAreas: Types.ObjectId[];
+
+  @Prop()
+  createdAt?: Date;
+
+  @Prop()
+  updatedAt?: Date;
 }
 
 export const AreaSchema = SchemaFactory.createForClass(Area);

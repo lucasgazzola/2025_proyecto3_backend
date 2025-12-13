@@ -32,7 +32,7 @@ export class User {
 
   @Prop({ type: Types.ObjectId, ref: 'SubArea', required: false, default: null })
   subArea: Types.ObjectId;
- 
+
   @Prop({ type: String, enum: Object.values(RoleEnum), default: RoleEnum.USER })
   role: RoleEnum;
 
@@ -47,6 +47,12 @@ export class User {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Claim' }], default: [] })
   claims: Types.ObjectId[];
+
+  @Prop()
+  createdAt?: Date;
+
+  @Prop()
+  updatedAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

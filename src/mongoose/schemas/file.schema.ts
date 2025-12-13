@@ -15,6 +15,12 @@ export class File {
 
   @Prop({ type: String, enum: Object.values(FileTypeEnum), required: true })
   fileType: FileTypeEnum;
+
+  @Prop()
+  createdAt?: Date;
+
+  @Prop()
+  updatedAt?: Date;
 }
 
 export const FileSchema = SchemaFactory.createForClass(File);
