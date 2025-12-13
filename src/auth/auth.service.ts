@@ -43,20 +43,14 @@ export class AuthService {
 
       const hashedPassword = await bcrypt.hash(body.password, 10);
 
-      const newUser = await this.usersService.create({
-        email: body.email,
-        firstName: body.firstName,
-        lastName: body.lastName,
-        password: hashedPassword,
-        role: Role.CUSTOMER,
-        subAreaId: (body as any).subAreaId || undefined,
-      } as any);
-
-      // eslint-disable-next-line no-console
-      console.debug('AuthService.register: created', {
-        id: (newUser as any)?.id ?? null,
-        email: (newUser as any)?.email ?? body.email,
-      });
+    const newUser = await this.usersService.create({
+      email: body.email,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      password: hashedPassword,
+      role: Role.CUSTOMER,
+      subAreaId: (body as any).subAreaId || undefined,
+    } as any);
 
       const { password, ...result } = newUser as any;
       return result;
