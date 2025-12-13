@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Claim, ClaimDocument, ClaimPriorityEnum, ClaimCriticalityEnum, ClaimTypeEnum } from '../mongoose/schemas/claim.schema';
@@ -25,10 +25,10 @@ export class ClaimsService {
       description: createClaimDto.description,
       claimType: createClaimDto.claimType,
       priority: createClaimDto.priority,
-      criticality: createClaimDto.criticality,
+      criticality: createClaimDto.criticality ?? createClaimDto.criticality,
       project: new Types.ObjectId(createClaimDto.project),
       user: new Types.ObjectId(userId),
-      ...(createClaimDto.file && { file: new Types.ObjectId(createClaimDto.file) }),
+      // ...(createClaimDto.file && { file: new Types.ObjectId(createClaimDto.file) }),
     });
     const claim = await created.save();
 
@@ -37,13 +37,14 @@ export class ClaimsService {
       startTime: new Date(),
       startDate: new Date(),
       claim: claim._id,
-      claimState: ClaimStatusEnum.PENDING,
+       claimStatus: ClaimStatusEnum.PENDING,
       priority: claim.priority,
-      severity: claim.severity,
+      criticality: claim.criticality,
       user: claim.user,
     });
     await history.save();
     await this.claimModel.findByIdAndUpdate(claim._id, { $push: { history: history._id } });
+    await this.projectModel.findByIdAndUpdate(claim.project, { $push: { claims: claim._id } });
     return claim;
   }
 
@@ -56,45 +57,68 @@ export class ClaimsService {
       .find(query)
       .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
       .populate({ path: 'area', select: 'name' })
+      .populate({
+        path: 'history',
+        select: 'action startTime endTime startDate endDate claimState priority <criticality></criticality> user',
+        populate: { path: 'user', select: 'email firstName lastName role phone' },
+      })
       .lean()
       .exec();
   }
 
   async findOne(id: string) {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Claim not found');
-    return this.claimModel.findById(id).exec();
+    return this.claimModel
+      .findById(id)
+      .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
+      .populate({ path: 'area', select: 'name' })
+      .populate({
+        path: 'history',
+        select: 'action startTime endTime startDate endDate claimState priority criticality user',
+        populate: { path: 'user', select: 'email firstName lastName role phone' },
+      })
+      .lean()
+      .exec();
   }
 
   async updateWithHistory(id: string, updateClaimDto: UpdateClaimDto) {
+    // Si el último historial está RESOLVED, no permitir cambios
+    const lastHistory = await this.historyModel
+      .findOne({ claim: new Types.ObjectId(id) })
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
+     if (lastHistory?.claimStatus === ClaimStatusEnum.RESOLVED) {
+      throw new ConflictException('This claim has been resolved and cannot be updated.');
+    }
     const updated = await this.claimModel.findByIdAndUpdate(
       id,
       {
-        ...(updateClaimDto.claimStatus && { claimStatus: updateClaimDto.claimStatus }),
         ...(updateClaimDto.claimType && { claimType: updateClaimDto.claimType }),
         ...(updateClaimDto.priority && { priority: updateClaimDto.priority }),
-        ...(updateClaimDto.criticality && { severity: updateClaimDto.criticality }),
+        ...(updateClaimDto.criticality && { criticality: updateClaimDto.criticality }),
         ...(updateClaimDto.project && { project: new Types.ObjectId(updateClaimDto.project) }),
         ...(updateClaimDto.subarea && { subarea: updateClaimDto.subarea }),
         ...(updateClaimDto.area && { area: updateClaimDto.area }),
-      } as any,
+      },
       { new: true },
     ).exec();
     if (!updated) throw new NotFoundException('Claim not found');
 
-    if (updateClaimDto.actions || updateClaimDto.claimStatus) {
-      const history = new this.historyModel({
-        action: updateClaimDto.actions || 'Actualización de reclamo',
-        startTime: new Date(),
-        startDate: new Date(),
-        claim: new Types.ObjectId(id),
-        claimState: (updateClaimDto.claimStatus as any) || ClaimStatusEnum.IN_PROGRESS,
-        priority: updated.priority,
-        severity: updated.severity,
-        user: updated.user,
-      } as any);
-      await history.save();
-      await this.claimModel.findByIdAndUpdate(id, { $push: { history: history._id } });
-    }
+    // Registrar SIEMPRE una nueva entrada en el historial en cada actualización
+    const history = new this.historyModel({
+      action: updateClaimDto.actions || 'Actualización de reclamo',
+      startTime: new Date(),
+      startDate: new Date(),
+      claim: new Types.ObjectId(id),
+       claimStatus: updateClaimDto.claimStatus,
+      priority: updated.priority,
+      criticality: updated.criticality,
+      user: updated.user,
+    });
+    await history.save();
+    await this.claimModel.findByIdAndUpdate(id, { $push: { history: history._id } });
     return updated;
   }
 
