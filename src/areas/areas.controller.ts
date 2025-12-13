@@ -1,9 +1,13 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/auth-roles.guard';
 import { AreasService } from './areas.service';
 import { AreaResponseDto } from './dto/area-response.dto';
 
 @ApiTags('Areas')
+@ApiBearerAuth('jwt')
+@UseGuards(JwtAuthGuard)
 @Controller('areas')
 export class AreasController {
 	constructor(private readonly areasService: AreasService) {}
