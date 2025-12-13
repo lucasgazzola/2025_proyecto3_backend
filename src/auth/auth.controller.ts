@@ -93,6 +93,6 @@ export class AuthController {
     description: 'Returns the token payload as user',
   })
   me(@Req() req: any) {
-    return { user: req.user };
+    return { ...req.user };
   }
 }
