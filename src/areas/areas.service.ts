@@ -2,8 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { AREAS_REPOSITORY } from './repositories/areas.repository.interface';
 import type { IAreasRepository } from './repositories/areas.repository.interface';
 
-type SubareaDto = { id: string; name: string };
-type AreaDto = { id: string; name: string; subareas: SubareaDto[] };
+type SubareaDto = { _id: string; name: string };
+type AreaDto = { _id: string; name: string; subareas: SubareaDto[] };
 
 @Injectable()
 export class AreasService {
