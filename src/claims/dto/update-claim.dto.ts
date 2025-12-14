@@ -5,7 +5,7 @@ import { IsEnum, IsOptional, IsString } from 'class-validator';
 
 export class UpdateClaimDto extends PartialType(CreateClaimDto) {
 	@ApiProperty({ example: ClaimStatus.IN_PROGRESS, required: false, enum: ClaimStatus })
-  	@IsOptional()
+  @IsOptional()
 	@IsEnum(ClaimStatus)
 	claimStatus?: ClaimStatus;
 
@@ -24,22 +24,17 @@ export class UpdateClaimDto extends PartialType(CreateClaimDto) {
 	@IsEnum(ClaimType)
 	claimType: ClaimType;
 
-  	@ApiProperty({ example: 'Website for client X', required: true })
+  @ApiProperty({ example: 'Website for client X', required: true })
 	@IsString()
 	actions: string;
 
-  	@ApiProperty({ example: 'Frontend', required: false })
-	@IsOptional()
-	@IsString()
-	area?: string;
-
-  	@ApiProperty({ example: 'UI', required: false })
+  @ApiProperty({ example: 'UI', required: false })
 	@IsOptional()
 	@IsString()
 	subarea?: string;
 
-  	@ApiProperty({ example: 'Final resolution details', required: false })
-  	@IsOptional()
-  	@IsString()
-  	finalResolution?: string;
+  @ApiProperty({ example: 'Final resolution details', required: false })
+  @IsOptional()
+  @IsString()
+  finalResolution?: string;
 }

@@ -47,8 +47,8 @@ export class Claim {
   @Prop({ type: String, enum: Object.values(ClaimTypeEnum), required: true })
   claimType: ClaimTypeEnum;
 
-  @Prop({ type: Types.ObjectId, ref: 'Area', required: false })
-  area?: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'SubArea', required: false })
+  subarea?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'File' })
   file?: Types.ObjectId;
