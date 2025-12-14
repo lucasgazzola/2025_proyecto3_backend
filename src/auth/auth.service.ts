@@ -75,18 +75,18 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const resolvedId = (user as any).id ?? (user as any)._id?.toString();
+    const resolvedId = user.id;
     if (!resolvedId) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const payload: TokenPayload = {
-      id: (user as any)._id.toString(),
-      role: (user as any).role,
-      email: (user as any).email,
-      firstName: (user as any).firstName,
-      lastName: (user as any).lastName,
-    } as any;
+      id: user.id,
+      role: user.role,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    };
 
     return {
       accessToken: this.generateToken(payload, 'auth'),
