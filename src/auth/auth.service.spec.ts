@@ -29,8 +29,6 @@ describe('AuthService (unit)', () => {
     jest.clearAllMocks();
     authService = new AuthService(
       mockUsersService,
-      mockMailService,
-      mockLogsService,
     );
   });
 
@@ -78,7 +76,7 @@ describe('AuthService (unit)', () => {
       mockUsersService.findByEmailWithPassword.mockResolvedValue(null);
     });
 
-    it('When (4) valid format but incorrect credentials -> throws UnauthorizedException with "Credenciales inválidas"', async () => {
+    it('When (4) valid format but incorrect credentials -> throws UnauthorizedException with "Invalid credentials"', async () => {
       const dto = new LoginAuthDto();
       dto.email = 'valid@example.com';
       dto.password = 'wrongpass';
@@ -101,7 +99,7 @@ describe('AuthService (unit)', () => {
         UnauthorizedException,
       );
       await expect(authService.login(dto)).rejects.toThrow(
-        'Credenciales inválidas',
+        'Invalid credentials',
       );
     });
 
@@ -152,7 +150,7 @@ describe('AuthService (unit)', () => {
       );
     });
 
-    it('When (2) email already exists -> throws "El correo ya está registrado"', async () => {
+    it('When (2) email already exists -> throws "Email already registered"', async () => {
       const RegisterDto = require('./dto/register.dto').RegisterAuthDto;
       const dto = new RegisterDto();
       dto.email = 'exist@example.com';
@@ -167,7 +165,7 @@ describe('AuthService (unit)', () => {
       });
 
       await expect(authService.register(dto)).rejects.toThrow(
-        'El correo ya está registrado',
+        'Email already registered',
       );
     });
 
@@ -223,7 +221,7 @@ describe('AuthService (unit)', () => {
       );
     });
 
-    it('When (6) password and confirmation different -> throws "Las contraseñas no coinciden"', async () => {
+    it('When (6) password and confirmation different -> throws "Passwords do not match"', async () => {
       const RegisterDto = require('./dto/register.dto').RegisterAuthDto;
       const dto = new RegisterDto();
       dto.email = 'new@example.com';
@@ -235,7 +233,7 @@ describe('AuthService (unit)', () => {
       mockUsersService.findByEmail.mockResolvedValue(null);
 
       await expect(authService.register(dto)).rejects.toThrow(
-        'Las contraseñas no coinciden',
+        'Passwords do not match',
       );
     });
 
