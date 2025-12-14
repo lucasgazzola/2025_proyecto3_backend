@@ -17,11 +17,6 @@ describe('AuthService (unit)', () => {
     findByEmail: jest.fn(),
     create: jest.fn(),
   };
-  const mockMailService: any = { send: jest.fn() };
-  const mockLogsService: any = {
-    createFailureLog: jest.fn(),
-    createSuccessLog: jest.fn(),
-  };
 
   beforeEach(() => {
     // Restore any spies/mocks to avoid 'Cannot redefine property' errors
