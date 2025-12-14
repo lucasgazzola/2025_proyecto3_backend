@@ -142,12 +142,18 @@ async function run() {
       priority: chosenPriority,
       criticality: chosenCriticality,
       claimType: rand(claimTypes),
-      area: area._id,
       file,
     });
     claimsCreated.push(claim._id);
 
     // Crear estado inicial mínimo: "Creado por Customer", PENDING, user = creador del proyecto
+    // Incluimos snapshot de area+subarea en el history (siempre en el seed elegimos un subarea para el area)
+    const subsForArea = subareas.filter((s: any) => String(s.area) === String(area._id));
+    const chosenSub = subsForArea.length ? rand(subsForArea) : undefined;
+    const areaSnapshot = chosenSub
+      ? { _id: area._id, name: area.name, subarea: { _id: chosenSub._id, name: chosenSub.name } }
+      : undefined;
+
     await ClaimStateHistoryModel.create({
       action: 'Creado por Customer',
       startTime: new Date(),
@@ -157,6 +163,7 @@ async function run() {
       priority: chosenPriority,
       criticality: chosenCriticality,
       user: projectOwner,
+      ...(areaSnapshot ? { area: areaSnapshot } : {}),
     });
   }
 
@@ -165,7 +172,7 @@ async function run() {
   for (const claimId of claimsCreated) {
     const events = Math.floor(2 + Math.random()*4); // 2-5 eventos
     let start = new Date(Date.now() - Math.floor(Math.random()*20)*24*60*60*1000);
-    for (let e = 0; e < events; e++) {
+      for (let e = 0; e < events; e++) {
       const user = rand(usersCreated);
       const startTime = new Date(start);
       const endTime = new Date(startTime.getTime() + Math.floor(Math.random()*48)*60*60*1000);
@@ -174,6 +181,18 @@ async function run() {
       const claimDoc = await ClaimModel.findById(claimId).lean();
       const claimPriority = claimDoc?.priority ?? rand(priorities);
       const claimCriticality = claimDoc?.criticality ?? rand(criticalities);
+
+      // Optionally attach an area+subarea snapshot (must include subarea if area present)
+      const includeArea = Math.random() < 0.4;
+      let areaSnapshot: any = undefined;
+      if (includeArea) {
+        const area = rand(areas);
+        const subsForArea = subareas.filter((s: any) => String(s.area) === String(area._id));
+        if (subsForArea.length) {
+          const chosenSub = rand(subsForArea);
+          areaSnapshot = { _id: area._id, name: area.name, subarea: { _id: chosenSub._id, name: chosenSub.name } };
+        }
+      }
 
       await ClaimStateHistoryModel.create({
         action: `Evento ${e + 1}`,
@@ -186,6 +205,7 @@ async function run() {
         priority: claimPriority,
         criticality: claimCriticality,
         user,
+        ...(areaSnapshot ? { area: areaSnapshot } : {}),
       });
       start = endTime;
     }
