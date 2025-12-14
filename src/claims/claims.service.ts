@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Claim, ClaimDocument } from '../mongoose/schemas/claim.schema';
@@ -7,6 +7,8 @@ import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimStateHistory, ClaimStateHistoryDocument, ClaimStatusEnum } from '../mongoose/schemas/claim-state-history.schema';
 import { RoleEnum, UserDocument, User } from '../mongoose/schemas/user.schema';
 import { Project, ProjectDocument } from '../mongoose/schemas/project.schema';
+import { Area, AreaDocument } from '../mongoose/schemas/area.schema';
+import { SubArea, SubAreaDocument } from '../mongoose/schemas/subarea.schema';
 import { ClaimMessage, ClaimMessageDocument } from '../mongoose/schemas/claim-message.schema';
 
 @Injectable()
@@ -16,6 +18,8 @@ export class ClaimsService {
     @InjectModel(ClaimStateHistory.name) private historyModel: Model<ClaimStateHistoryDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    @InjectModel(Area.name) private areaModel: Model<AreaDocument>,
+    @InjectModel(SubArea.name) private subAreaModel: Model<SubAreaDocument>,
     @InjectModel(ClaimMessage.name) private messageModel: Model<ClaimMessageDocument>,
   ) {}
 
@@ -56,7 +60,6 @@ export class ClaimsService {
     const claims = await this.claimModel
       .find(query)
       .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
-      .populate({ path: 'area', select: 'name' })
       .lean()
       .exec();
 
@@ -66,15 +69,17 @@ export class ClaimsService {
         const lastHistory = await this.historyModel
           .findOne({ claim: new Types.ObjectId(claim._id) })
           .sort({ startDate: -1 })
-          .select('claimStatus startDate')
+          .select('claimStatus startDate area')
           .lean()
           .exec();
 
         const latestStatus: ClaimStatusEnum | undefined = lastHistory?.claimStatus;
-        const { history, ...rest } = claim;
+        // remove `area` from the returned claim (we store area snapshots in histories instead)
+        const { history, area, ...rest } = claim as Record<string, unknown>;
         return {
           ...rest,
           claimStatus: latestStatus,
+          area: lastHistory?.area,
         };
       }),
     );
@@ -87,10 +92,9 @@ export class ClaimsService {
     return this.claimModel
       .findById(id)
       .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
-      .populate({ path: 'area', select: 'name' })
       .populate({
         path: 'history',
-        select: 'action startTime endTime startDate endDate claimState priority criticality user',
+        select: 'action startTime endTime startDate endDate claimState priority criticality user area',
         populate: { path: 'user', select: 'email firstName lastName role phone' },
       })
       .lean()
@@ -98,6 +102,9 @@ export class ClaimsService {
   }
 
   async updateWithHistory(id: string, updateClaimDto: UpdateClaimDto) {
+    // Validar que `id` es un ObjectId válido antes de usarlo
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Claim not found');
+
     // Si el último historial está RESOLVED, no permitir cambios
     const lastHistory = await this.historyModel
       .findOne({ claim: new Types.ObjectId(id) })
@@ -105,24 +112,52 @@ export class ClaimsService {
       .lean()
       .exec();
 
+      console.log('Last history for claim', id, ':', lastHistory);
+
     if (lastHistory?.claimStatus === ClaimStatusEnum.RESOLVED) {
       throw new ConflictException('This claim has been resolved and cannot be updated.');
     }
+    // Validate project id in DTO before casting to ObjectId
+    const projectUpdate: any = updateClaimDto.project && Types.ObjectId.isValid(updateClaimDto.project)
+      ? { project: new Types.ObjectId(updateClaimDto.project) }
+      : (updateClaimDto.project ? (() => { throw new BadRequestException('Invalid project id'); })() : {});
+
     const updated = await this.claimModel.findByIdAndUpdate(
       id,
       {
         ...(updateClaimDto.claimType && { claimType: updateClaimDto.claimType }),
         ...(updateClaimDto.priority && { priority: updateClaimDto.priority }),
         ...(updateClaimDto.criticality && { criticality: updateClaimDto.criticality }),
-        ...(updateClaimDto.project && { project: new Types.ObjectId(updateClaimDto.project) }),
+        ...projectUpdate,
         ...(updateClaimDto.subarea && { subarea: updateClaimDto.subarea }),
-        ...(updateClaimDto.area && { area: updateClaimDto.area }),
+        // NOTE: do NOT store `area` on the Claim document itself; we store snapshots in histories
       },
       { new: true },
     ).exec();
     if (!updated) throw new NotFoundException('Claim not found');
 
     // Registrar SIEMPRE una nueva entrada en el historial en cada actualización
+    // Validate: if area is provided, subarea must also be provided
+    if (updateClaimDto.area && !updateClaimDto.subarea) {
+      throw new BadRequestException('If area is provided, subarea must be provided.');
+    }
+
+    // Build optional area snapshot for this history (area + nested subarea)
+    let areaSnapshot: undefined | { _id: Types.ObjectId; name: string; subarea?: { _id: Types.ObjectId; name: string } } = undefined;
+    if (updateClaimDto.area) {
+      if (Types.ObjectId.isValid(updateClaimDto.area)) {
+        const areaDoc = await this.areaModel.findById(updateClaimDto.area).lean().exec();
+        if (areaDoc) {
+          if (updateClaimDto.subarea && Types.ObjectId.isValid(updateClaimDto.subarea)) {
+            const subDoc = await this.subAreaModel.findById(updateClaimDto.subarea).lean().exec();
+            areaSnapshot = { _id: areaDoc._id, name: areaDoc.name, ...(subDoc ? { subarea: { _id: subDoc._id, name: subDoc.name } } : {}) };
+          } else {
+            areaSnapshot = { _id: areaDoc._id, name: areaDoc.name };
+          }
+        }
+      }
+    }
+
     const history = new this.historyModel({
       action: updateClaimDto.actions || 'Actualización de reclamo',
       startTime: new Date(),
@@ -132,10 +167,18 @@ export class ClaimsService {
       priority: updated.priority,
       criticality: updated.criticality,
       user: updated.user,
+      ...(areaSnapshot ? { area: areaSnapshot } : {}),
     });
     await history.save();
     await this.claimModel.findByIdAndUpdate(id, { $push: { history: history._id } });
-    return updated;
+
+    // Devolver el claim actualizado enriquecido con el último estado y el snapshot de área
+    const fullClaim = await this.findOne(id);
+    return {
+      ...fullClaim,
+      claimStatus: history.claimStatus,
+      area: history.area,
+    } as any;
   }
 
   async remove(id: string) {
@@ -151,13 +194,17 @@ export class ClaimsService {
       .exec();
   }
 
-  async postMessage(claimId: string, user: any, body: { content: string; state: 'PRIVADO' | 'PUBLICO' }) {
+  async postMessage(
+    claimId: string,
+    user: Partial<User> & { id?: string; _id?: Types.ObjectId | string },
+    body: { content: string; state: 'PRIVADO' | 'PUBLICO' },
+  ) {
     const msg = new this.messageModel({
       claim: new Types.ObjectId(claimId),
-      user: new Types.ObjectId(user.id || user._id),
+      user: new Types.ObjectId(user.id ?? user._id),
       content: body.content,
       state: body.state,
-    } as any);
+    });
     return msg.save();
   }
 

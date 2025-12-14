@@ -1,30 +1,45 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { CreateClaimDto } from './create-claim.dto';
-import { ClaimStatus } from '../../common/enums/claims.enums';
+import { ClaimCriticality, ClaimPriority, ClaimStatus, ClaimType } from '../../common/enums/claims.enums';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 
 export class UpdateClaimDto extends PartialType(CreateClaimDto) {
 	@ApiProperty({ example: ClaimStatus.IN_PROGRESS, required: false, enum: ClaimStatus })
-  @IsOptional()
+  	@IsOptional()
 	@IsEnum(ClaimStatus)
 	claimStatus?: ClaimStatus;
 
-  @ApiProperty({ example: 'Website for client X', required: true })
+	@ApiProperty({ example: ClaimPriority.MEDIUM, enum: ClaimPriority })
+	@IsOptional()
+	@IsEnum(ClaimPriority)
+	priority: ClaimPriority;
+
+	@ApiProperty({ example: ClaimCriticality.MAJOR, enum: ClaimCriticality })
+	@IsOptional()
+	@IsEnum(ClaimCriticality)
+	criticality: ClaimCriticality;
+
+	@ApiProperty({ example: ClaimType.TECHNICAL, enum: ClaimType })
+	@IsOptional()
+	@IsEnum(ClaimType)
+	claimType: ClaimType;
+
+  	@ApiProperty({ example: 'Website for client X', required: true })
 	@IsString()
 	actions: string;
 
-  @ApiProperty({ example: 'Frontend', required: false })
+  	@ApiProperty({ example: 'Frontend', required: false })
 	@IsOptional()
 	@IsString()
 	area?: string;
 
-  @ApiProperty({ example: 'UI', required: false })
+  	@ApiProperty({ example: 'UI', required: false })
 	@IsOptional()
 	@IsString()
 	subarea?: string;
 
-  @ApiProperty({ example: 'Final resolution details', required: false })
-  @IsOptional()
-  @IsString()
-  finalResolution?: string;
+  	@ApiProperty({ example: 'Final resolution details', required: false })
+  	@IsOptional()
+  	@IsString()
+  	finalResolution?: string;
 }

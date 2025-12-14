@@ -55,6 +55,7 @@ export class ClaimsController {
       throw new UnauthorizedException('Only users with USER role can update claims');
     }
 
+    console.log('UpdateClaimDto received:', updateClaimDto);
     return this.claimsService.updateWithHistory(id, updateClaimDto);
   }
 

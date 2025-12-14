@@ -34,7 +34,7 @@ export class ProjectsService {
       .populate({ path: 'user', select: 'email firstName lastName role phone' })
       .populate({
         path: 'claims',
-        select: 'code description claimType priority criticality area createdAt updatedAt',
+        select: 'description claimType priority criticality area createdAt updatedAt',
         populate: [
           { path: 'area', select: 'name' },
           { path: 'user', select: 'email firstName lastName role phone' },
@@ -57,8 +57,7 @@ export class ProjectsService {
         : undefined;
       const mappedClaims = Array.isArray(claims)
         ? claims.map((c: any) => ({
-            id: c._id?.toString?.() ?? c.id,
-            code: c.code,
+            _id: c._id.toString(),
             description: c.description,
             claimType: c.claimType,
             priority: c.priority,
@@ -66,7 +65,7 @@ export class ProjectsService {
             area: c.area?.name ?? c.area,
             user: c.user
               ? {
-                  id: c.user._id?.toString?.() ?? c.user.id,
+                  _id: c.user._id.toString(),
                   email: c.user.email,
                   firstName: c.user.firstName,
                   lastName: c.user.lastName,
