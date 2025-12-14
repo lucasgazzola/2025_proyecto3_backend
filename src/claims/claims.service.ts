@@ -155,6 +155,14 @@ export class ClaimsService {
       }
     }
 
+    // Cerrar el historial previo (si existe) estableciendo fecha de fin
+    if (lastHistory?._id) {
+      await this.historyModel.findByIdAndUpdate(lastHistory._id, {
+        endTime: new Date(),
+        endDate: new Date(),
+      });
+    }
+
     const history = new this.historyModel({
       action: updateClaimDto.actions || 'Actualización de reclamo',
       startTime: new Date(),
