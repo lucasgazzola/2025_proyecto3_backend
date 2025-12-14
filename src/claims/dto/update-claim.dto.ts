@@ -32,9 +32,4 @@ export class UpdateClaimDto extends PartialType(CreateClaimDto) {
 	@IsOptional()
 	@IsString()
 	subarea?: string;
-
-  @ApiProperty({ example: 'Final resolution details', required: false })
-  @IsOptional()
-  @IsString()
-  finalResolution?: string;
 }
