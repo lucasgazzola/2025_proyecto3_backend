@@ -51,8 +51,6 @@ export class ClaimsController {
   @ApiBody({ type: UpdateClaimDto })
   @ApiResponse({ status: 200, description: 'Updated claim object' })
   update(@CurrentUser() user: any, @Param('id') id: string, @Body() updateClaimDto: UpdateClaimDto) {
-    console.log({user})
-
     if (user.role !== Role.USER) {
       throw new UnauthorizedException('Only users with USER role can update claims');
     }

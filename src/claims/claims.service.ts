@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Claim, ClaimDocument, ClaimPriorityEnum, ClaimCriticalityEnum, ClaimTypeEnum } from '../mongoose/schemas/claim.schema';
+import { Claim, ClaimDocument } from '../mongoose/schemas/claim.schema';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimStateHistory, ClaimStateHistoryDocument, ClaimStatusEnum } from '../mongoose/schemas/claim-state-history.schema';
@@ -21,7 +21,6 @@ export class ClaimsService {
 
   async create(createClaimDto: CreateClaimDto, userId: string) {
     const created = new this.claimModel({
-      code: createClaimDto.code,
       description: createClaimDto.description,
       claimType: createClaimDto.claimType,
       priority: createClaimDto.priority,
@@ -37,7 +36,7 @@ export class ClaimsService {
       startTime: new Date(),
       startDate: new Date(),
       claim: claim._id,
-       claimStatus: ClaimStatusEnum.PENDING,
+      claimStatus: ClaimStatusEnum.PENDING,
       priority: claim.priority,
       criticality: claim.criticality,
       user: claim.user,
@@ -53,17 +52,34 @@ export class ClaimsService {
     if (user?.role === RoleEnum.CUSTOMER) {
       query.user = new Types.ObjectId(user.id || user._id);
     }
-    return this.claimModel
+
+    const claims = await this.claimModel
       .find(query)
       .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
       .populate({ path: 'area', select: 'name' })
-      .populate({
-        path: 'history',
-        select: 'action startTime endTime startDate endDate claimState priority <criticality></criticality> user',
-        populate: { path: 'user', select: 'email firstName lastName role phone' },
-      })
       .lean()
       .exec();
+
+    // Para cada claim buscamos el último historial directamente en la colección de historiales
+    const claimsWithStatus = await Promise.all(
+      (claims || []).map(async (claim: any) => {
+        const lastHistory = await this.historyModel
+          .findOne({ claim: new Types.ObjectId(claim._id) })
+          .sort({ startDate: -1 })
+          .select('claimStatus startDate')
+          .lean()
+          .exec();
+
+        const latestStatus: ClaimStatusEnum | undefined = lastHistory?.claimStatus;
+        const { history, ...rest } = claim;
+        return {
+          ...rest,
+          claimStatus: latestStatus,
+        };
+      }),
+    );
+
+    return claimsWithStatus;
   }
 
   async findOne(id: string) {
@@ -89,7 +105,7 @@ export class ClaimsService {
       .lean()
       .exec();
 
-     if (lastHistory?.claimStatus === ClaimStatusEnum.RESOLVED) {
+    if (lastHistory?.claimStatus === ClaimStatusEnum.RESOLVED) {
       throw new ConflictException('This claim has been resolved and cannot be updated.');
     }
     const updated = await this.claimModel.findByIdAndUpdate(
@@ -112,7 +128,7 @@ export class ClaimsService {
       startTime: new Date(),
       startDate: new Date(),
       claim: new Types.ObjectId(id),
-       claimStatus: updateClaimDto.claimStatus,
+      claimStatus: updateClaimDto.claimStatus,
       priority: updated.priority,
       criticality: updated.criticality,
       user: updated.user,

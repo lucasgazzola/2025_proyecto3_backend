@@ -67,20 +67,7 @@ async function run() {
     createdAreas.push(area._id);
   }
 
-  // Áreas adicionales para volumen
-  const extraAreasCount = 20;
-  for (let i = 1; i <= extraAreasCount; i++) {
-    const areaName = `Área ${i.toString().padStart(2, '0')}`;
-    const area = await AreaModel.create({ name: areaName });
-    const subs = Array.from({ length: 5 }, (_, idx) => `Subárea ${i}-${idx + 1}`);
-    const subsIds: Types.ObjectId[] = [];
-    for (const s of subs) {
-      const sub = await SubAreaModel.create({ name: s, area: area._id });
-      subsIds.push(sub._id);
-    }
-    await AreaModel.findByIdAndUpdate(area._id, { $set: { subAreas: subsIds } });
-    createdAreas.push(area._id);
-  }
+  // No se crean áreas adicionales; solo se usan las definidas en `areasSeed`.
 
   const areas = await AreaModel.find().lean();
   const subareas = await SubAreaModel.find().lean();
@@ -111,7 +98,7 @@ async function run() {
 
   // Projects
   const projectTypes = Object.values(ProjectTypeEnum);
-  const projectsCreated: Types.ObjectId[] = [];
+  const projectsCreated: { id: Types.ObjectId; owner: Types.ObjectId }[] = [];
   for (let i = 0; i < 60; i++) {
     const owner = rand(usersCreated);
     const proj = await ProjectModel.create({
@@ -120,7 +107,7 @@ async function run() {
       user: owner,
       projectType: rand(projectTypes),
     });
-    projectsCreated.push(proj._id);
+    projectsCreated.push({ id: proj._id, owner });
   }
 
   // Files
@@ -140,22 +127,37 @@ async function run() {
   const claimTypes = Object.values(ClaimTypeEnum);
   const claimsCreated: Types.ObjectId[] = [];
   for (let i = 0; i < 120; i++) {
-    const project = rand(projectsCreated);
+    const projectObj = rand(projectsCreated);
+    const project = projectObj.id;
+    const projectOwner = projectObj.owner;
     const user = rand(usersCreated);
     const area = rand(areas);
     const file = Math.random() < 0.4 ? rand(filesCreated) : undefined;
+    const chosenPriority = rand(priorities);
+    const chosenCriticality = rand(criticalities);
     const claim = await ClaimModel.create({
-      code: `CLM-${(1000 + i).toString()}`,
       description: `Incidente ${(i + 1)} en ${area.name}`,
       project,
       user,
-      priority: rand(priorities),
-      criticality: rand(criticalities),
+      priority: chosenPriority,
+      criticality: chosenCriticality,
       claimType: rand(claimTypes),
       area: area._id,
       file,
     });
     claimsCreated.push(claim._id);
+
+    // Crear estado inicial mínimo: "Creado por Customer", PENDING, user = creador del proyecto
+    await ClaimStateHistoryModel.create({
+      action: 'Creado por Customer',
+      startTime: new Date(),
+      startDate: new Date(),
+      claim: claim._id,
+      claimStatus: ClaimStatusEnum.PENDING,
+      priority: chosenPriority,
+      criticality: chosenCriticality,
+      user: projectOwner,
+    });
   }
 
   // Claim state histories
@@ -168,6 +170,11 @@ async function run() {
       const startTime = new Date(start);
       const endTime = new Date(startTime.getTime() + Math.floor(Math.random()*48)*60*60*1000);
       const state = statuses[Math.min(e, statuses.length - 1)];
+      // fetch the claim to read its priority/criticality so histories are consistent
+      const claimDoc = await ClaimModel.findById(claimId).lean();
+      const claimPriority = claimDoc?.priority ?? rand(priorities);
+      const claimCriticality = claimDoc?.criticality ?? rand(criticalities);
+
       await ClaimStateHistoryModel.create({
         action: `Evento ${e + 1}`,
         startTime,
@@ -175,7 +182,9 @@ async function run() {
         startDate: startTime,
         endDate: e === events - 1 ? undefined : endTime,
         claim: claimId,
-        claimState: state,
+        claimStatus: state,
+        priority: claimPriority,
+        criticality: claimCriticality,
         user,
       });
       start = endTime;

@@ -1,4 +1,3 @@
-import { ClaimStatus } from './../../common/enums/claims.enums';
 import { IsString, IsOptional, IsNotEmpty, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import {

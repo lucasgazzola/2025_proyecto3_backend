@@ -79,7 +79,7 @@ export class ProjectsService {
           }))
         : undefined;
       return {
-        id: _id.toString(),
+        _id: _id.toString(),
         ...rest,
         ...(mappedUser && { user: mappedUser }),
         ...(mappedClaims && { claims: mappedClaims }),
