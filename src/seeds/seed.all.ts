@@ -150,6 +150,9 @@ async function run() {
     });
     claimsCreated.push(claim._id);
 
+    // Vincular el claim al proyecto (array de claims)
+    await ProjectModel.findByIdAndUpdate(project, { $push: { claims: claim._id } });
+
     // Crear estado inicial mínimo: "Creado por Customer", PENDING, user = creador del proyecto
     // Incluimos snapshot de area+subarea en el history (siempre en el seed elegimos un subarea para el area)
     const subsForArea = subareas.filter((s: any) => String(s.area) === String(area._id));
