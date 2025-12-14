@@ -77,6 +77,8 @@ async function run() {
   const lastNames = ['Garcia', 'Fernandez', 'Gomez', 'Rodriguez', 'Lopez', 'Martinez', 'Perez', 'Sanchez', 'Romero', 'Alonso'];
   const roles = [RoleEnum.USER, RoleEnum.CUSTOMER, RoleEnum.AUDITOR, RoleEnum.ADMIN];
   const usersCreated: Types.ObjectId[] = [];
+  const customers: Types.ObjectId[] = [];
+  const usersRoleUser: Types.ObjectId[] = [];
   for (let i = 0; i < 80; i++) {
     const fn = rand(firstNames); const ln = rand(lastNames);
     const email = `${fn}.${ln}.${i}@example.com`.toLowerCase();
@@ -94,13 +96,15 @@ async function run() {
       subArea: sub?._id ?? null,
     });
     usersCreated.push(user._id);
+    if (role === RoleEnum.CUSTOMER) customers.push(user._id);
+    if (role === RoleEnum.USER) usersRoleUser.push(user._id);
   }
 
   // Projects
   const projectTypes = Object.values(ProjectTypeEnum);
   const projectsCreated: { id: Types.ObjectId; owner: Types.ObjectId }[] = [];
   for (let i = 0; i < 60; i++) {
-    const owner = rand(usersCreated);
+    const owner = rand(customers.length ? customers : usersCreated);
     const proj = await ProjectModel.create({
       title: `Proyecto ${i + 1}`,
       description: `Descripción del proyecto ${i + 1}`,
@@ -130,7 +134,7 @@ async function run() {
     const projectObj = rand(projectsCreated);
     const project = projectObj.id;
     const projectOwner = projectObj.owner;
-    const user = rand(usersCreated);
+    const user = rand(customers.length ? customers : usersCreated);
     const area = rand(areas);
     const file = Math.random() < 0.4 ? rand(filesCreated) : undefined;
     const chosenPriority = rand(priorities);
@@ -172,11 +176,19 @@ async function run() {
   for (const claimId of claimsCreated) {
     const events = Math.floor(2 + Math.random()*4); // 2-5 eventos
     let start = new Date(Date.now() - Math.floor(Math.random()*20)*24*60*60*1000);
-      for (let e = 0; e < events; e++) {
-      const user = rand(usersCreated);
+    for (let e = 0; e < events; e++) {
+      // Solo usuarios con rol USER pueden editar (crear nueva entrada de historial)
+      const user = rand(usersRoleUser.length ? usersRoleUser : usersCreated);
       const startTime = new Date(start);
       const endTime = new Date(startTime.getTime() + Math.floor(Math.random()*48)*60*60*1000);
       const state = statuses[Math.min(e, statuses.length - 1)];
+
+      // Si el último historial está RESOLVED, no agregar nuevos eventos
+      const lastHistory = await ClaimStateHistoryModel
+        .findOne({ claim: claimId })
+        .sort({ startDate: -1 })
+        .lean();
+      if (lastHistory?.claimStatus === ClaimStatusEnum.RESOLVED) break;
       // fetch the claim to read its priority/criticality so histories are consistent
       const claimDoc = await ClaimModel.findById(claimId).lean();
       const claimPriority = claimDoc?.priority ?? rand(priorities);
@@ -194,12 +206,20 @@ async function run() {
         }
       }
 
+      // Cerrar historial previo (si existe) antes de crear el nuevo
+      if (lastHistory?._id) {
+        await ClaimStateHistoryModel.findByIdAndUpdate(lastHistory._id, {
+          endTime: endTime,
+          endDate: endTime,
+        });
+      }
+
       await ClaimStateHistoryModel.create({
         action: `Evento ${e + 1}`,
         startTime,
-        endTime: e === events - 1 ? undefined : endTime,
+        endTime: undefined,
         startDate: startTime,
-        endDate: e === events - 1 ? undefined : endTime,
+        endDate: undefined,
         claim: claimId,
         claimStatus: state,
         priority: claimPriority,
