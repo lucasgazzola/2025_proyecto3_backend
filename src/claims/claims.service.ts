@@ -26,9 +26,6 @@ export class ClaimsService {
   async create(createClaimDto: CreateClaimDto, userId: string) {
     const created = new this.claimModel({
       description: createClaimDto.description,
-      claimType: createClaimDto.claimType,
-      priority: createClaimDto.priority,
-      criticality: createClaimDto.criticality ?? createClaimDto.criticality,
       project: new Types.ObjectId(createClaimDto.project),
       user: new Types.ObjectId(userId),
       // ...(createClaimDto.file && { file: new Types.ObjectId(createClaimDto.file) }),
@@ -41,8 +38,8 @@ export class ClaimsService {
       startDate: new Date(),
       claim: claim._id,
       claimStatus: ClaimStatusEnum.PENDING,
-      priority: claim.priority,
-      criticality: claim.criticality,
+      priority: createClaimDto.priority,
+      criticality: createClaimDto.criticality,
       user: claim.user,
     });
     await history.save();
@@ -123,9 +120,7 @@ export class ClaimsService {
     const updated = await this.claimModel.findByIdAndUpdate(
       id,
       {
-        ...(updateClaimDto.claimType && { claimType: updateClaimDto.claimType }),
-        ...(updateClaimDto.priority && { priority: updateClaimDto.priority }),
-        ...(updateClaimDto.criticality && { criticality: updateClaimDto.criticality }),
+        // claimType/priority/criticality ya no viven en Claim; quedan en el historial
         ...projectUpdate,
         ...(updateClaimDto.subarea && Types.ObjectId.isValid(updateClaimDto.subarea) && { subarea: new Types.ObjectId(updateClaimDto.subarea) })
       },
@@ -165,8 +160,9 @@ export class ClaimsService {
       startDate: new Date(),
       claim: new Types.ObjectId(id),
       claimStatus: updateClaimDto.claimStatus,
-      priority: updated.priority,
-      criticality: updated.criticality,
+      priority: updateClaimDto.priority,
+      criticality: updateClaimDto.criticality,
+      claimType: updateClaimDto.claimType,
       user: new Types.ObjectId(currentUser?.id ?? currentUser?._id ?? String(updated.user)),
       ...(areaSnapshot ? { area: areaSnapshot } : {}),
     });
