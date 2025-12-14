@@ -129,7 +129,8 @@ export class ClaimsService {
         ...(updateClaimDto.priority && { priority: updateClaimDto.priority }),
         ...(updateClaimDto.criticality && { criticality: updateClaimDto.criticality }),
         ...projectUpdate,
-        ...(updateClaimDto.subarea && { subarea: updateClaimDto.subarea }),
+        ...(updateClaimDto.subarea && Types.ObjectId.isValid(updateClaimDto.subarea) && { subarea: new Types.ObjectId(updateClaimDto.subarea) }),
+        ...(updateClaimDto.finalResolution && { finalResolution: updateClaimDto.finalResolution }),
         // NOTE: do NOT store `area` on the Claim document itself; we store snapshots in histories
       },
       { new: true },
@@ -137,24 +138,20 @@ export class ClaimsService {
     if (!updated) throw new NotFoundException('Claim not found');
 
     // Registrar SIEMPRE una nueva entrada en el historial en cada actualización
-    // Validate: if area is provided, subarea must also be provided
-    if (updateClaimDto.area && !updateClaimDto.subarea) {
-      throw new BadRequestException('If area is provided, subarea must be provided.');
-    }
-
-    // Build optional area snapshot for this history (area + nested subarea)
+    // Como el área ya no viene en el DTO, derivamos el área desde la subárea (si se envía)
     let areaSnapshot: undefined | { _id: Types.ObjectId; name: string; subarea?: { _id: Types.ObjectId; name: string } } = undefined;
-    if (updateClaimDto.area) {
-      if (Types.ObjectId.isValid(updateClaimDto.area)) {
-        const areaDoc = await this.areaModel.findById(updateClaimDto.area).lean().exec();
-        if (areaDoc) {
-          if (updateClaimDto.subarea && Types.ObjectId.isValid(updateClaimDto.subarea)) {
-            const subDoc = await this.subAreaModel.findById(updateClaimDto.subarea).lean().exec();
-            areaSnapshot = { _id: areaDoc._id, name: areaDoc.name, ...(subDoc ? { subarea: { _id: subDoc._id, name: subDoc.name } } : {}) };
-          } else {
-            areaSnapshot = { _id: areaDoc._id, name: areaDoc.name };
-          }
-        }
+    if (updateClaimDto.subarea && Types.ObjectId.isValid(updateClaimDto.subarea)) {
+      const subDoc = await this.subAreaModel
+        .findById(updateClaimDto.subarea)
+        .populate({ path: 'area', select: 'name' })
+        .lean()
+        .exec();
+      if (subDoc && subDoc.area && (subDoc.area as any)._id) {
+        areaSnapshot = {
+          _id: (subDoc.area as any)._id,
+          name: (subDoc.area as any).name,
+          subarea: { _id: subDoc._id, name: subDoc.name },
+        };
       }
     }
 
@@ -178,7 +175,7 @@ export class ClaimsService {
       ...fullClaim,
       claimStatus: history.claimStatus,
       area: history.area,
-    } as any;
+    };
   }
 
   async remove(id: string) {
