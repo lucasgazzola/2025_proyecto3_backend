@@ -129,9 +129,7 @@ export class ClaimsService {
         ...(updateClaimDto.priority && { priority: updateClaimDto.priority }),
         ...(updateClaimDto.criticality && { criticality: updateClaimDto.criticality }),
         ...projectUpdate,
-        ...(updateClaimDto.subarea && Types.ObjectId.isValid(updateClaimDto.subarea) && { subarea: new Types.ObjectId(updateClaimDto.subarea) }),
-        ...(updateClaimDto.finalResolution && { finalResolution: updateClaimDto.finalResolution }),
-        // NOTE: do NOT store `area` on the Claim document itself; we store snapshots in histories
+        ...(updateClaimDto.subarea && Types.ObjectId.isValid(updateClaimDto.subarea) && { subarea: new Types.ObjectId(updateClaimDto.subarea) })
       },
       { new: true },
     ).exec();
