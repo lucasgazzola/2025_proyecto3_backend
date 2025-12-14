@@ -7,11 +7,6 @@ import {
 } from '../../common/enums/claims.enums';
 
 export class CreateClaimDto {
-  @ApiProperty({ example: 'CLM-001', description: 'Unique claim code' })
-  @IsString()
-  @IsNotEmpty()
-  code: string;
-
   @ApiProperty({
     example: 'System crashes when saving',
     description: 'Description',
