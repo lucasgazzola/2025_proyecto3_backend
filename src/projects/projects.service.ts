@@ -34,9 +34,9 @@ export class ProjectsService {
       .populate({ path: 'user', select: 'email firstName lastName role phone' })
       .populate({
         path: 'claims',
-        select: 'description claimType priority criticality area createdAt updatedAt',
+        select: 'description claimType priority criticality subarea createdAt updatedAt',
         populate: [
-          { path: 'area', select: 'name' },
+          { path: 'subarea', select: 'name area', populate: { path: 'area', select: 'name' } },
           { path: 'user', select: 'email firstName lastName role phone' },
         ],
       })
@@ -62,7 +62,10 @@ export class ProjectsService {
             claimType: c.claimType,
             priority: c.priority,
             criticality: c.criticality,
-            area: c.area?.name ?? c.area,
+            area: c?.subarea?.area?.name ?? undefined,
+            subarea: c?.subarea
+              ? { _id: c.subarea._id?.toString?.(), name: c.subarea.name }
+              : undefined,
             user: c.user
               ? {
                   _id: c.user._id.toString(),

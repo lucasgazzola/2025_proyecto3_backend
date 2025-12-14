@@ -94,14 +94,14 @@ export class ClaimsService {
       .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
       .populate({
         path: 'history',
-        select: 'action startTime endTime startDate endDate claimState priority criticality user area',
+        select: 'action startTime endTime startDate endDate claimStatus priority criticality user area',
         populate: { path: 'user', select: 'email firstName lastName role phone' },
       })
       .lean()
       .exec();
   }
 
-  async updateWithHistory(id: string, updateClaimDto: UpdateClaimDto) {
+  async updateWithHistory(id: string, updateClaimDto: UpdateClaimDto, currentUser?: { id?: string; _id?: string }) {
     // Validar que `id` es un ObjectId válido antes de usarlo
     if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Claim not found');
 
@@ -111,8 +111,6 @@ export class ClaimsService {
       .sort({ createdAt: -1 })
       .lean()
       .exec();
-
-      console.log('Last history for claim', id, ':', lastHistory);
 
     if (lastHistory?.claimStatus === ClaimStatusEnum.RESOLVED) {
       throw new ConflictException('This claim has been resolved and cannot be updated.');
@@ -169,7 +167,7 @@ export class ClaimsService {
       claimStatus: updateClaimDto.claimStatus,
       priority: updated.priority,
       criticality: updated.criticality,
-      user: updated.user,
+      user: new Types.ObjectId(currentUser?.id ?? currentUser?._id ?? String(updated.user)),
       ...(areaSnapshot ? { area: areaSnapshot } : {}),
     });
     await history.save();

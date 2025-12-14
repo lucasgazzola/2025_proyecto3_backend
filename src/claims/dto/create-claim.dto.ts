@@ -4,6 +4,7 @@ import {
   ClaimPriority,
   ClaimCriticality,
   ClaimType,
+  ClaimStatus,
 } from '../../common/enums/claims.enums';
 
 export class CreateClaimDto {
