@@ -139,13 +139,12 @@ async function run() {
     const file = Math.random() < 0.4 ? rand(filesCreated) : undefined;
     const chosenPriority = rand(priorities);
     const chosenCriticality = rand(criticalities);
+    const chosenClaimType = rand(claimTypes);
     const claim = await ClaimModel.create({
       description: `Incidente ${(i + 1)} en ${area.name}`,
       project,
       user,
-      priority: chosenPriority,
-      criticality: chosenCriticality,
-      claimType: rand(claimTypes),
+      // priority/criticality/claimType viven en historial
       file,
     });
     claimsCreated.push(claim._id);
@@ -169,6 +168,7 @@ async function run() {
       claimStatus: ClaimStatusEnum.PENDING,
       priority: chosenPriority,
       criticality: chosenCriticality,
+      claimType: chosenClaimType,
       user: projectOwner,
       ...(areaSnapshot ? { area: areaSnapshot } : {}),
     });
@@ -193,9 +193,14 @@ async function run() {
         .lean();
       if (lastHistory?.claimStatus === ClaimStatusEnum.RESOLVED) break;
       // fetch the claim to read its priority/criticality so histories are consistent
-      const claimDoc = await ClaimModel.findById(claimId).lean();
-      const claimPriority = claimDoc?.priority ?? rand(priorities);
-      const claimCriticality = claimDoc?.criticality ?? rand(criticalities);
+      // leer del último historial para consistencia, si existe
+      const lastHist = await ClaimStateHistoryModel
+        .findOne({ claim: claimId })
+        .sort({ startDate: -1 })
+        .lean();
+      const claimPriority = lastHist?.priority ?? rand(priorities);
+      const claimCriticality = lastHist?.criticality ?? rand(criticalities);
+      const claimType = lastHist?.claimType ?? rand(claimTypes);
 
       // Optionally attach an area+subarea snapshot (must include subarea if area present)
       const includeArea = Math.random() < 0.4;
@@ -227,6 +232,7 @@ async function run() {
         claimStatus: state,
         priority: claimPriority,
         criticality: claimCriticality,
+        claimType,
         user,
         ...(areaSnapshot ? { area: areaSnapshot } : {}),
       });

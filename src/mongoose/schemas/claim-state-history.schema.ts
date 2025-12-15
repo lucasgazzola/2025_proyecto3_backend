@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { ClaimPriorityEnum, ClaimCriticalityEnum } from './claim.schema';
+import { ClaimPriorityEnum, ClaimCriticalityEnum, ClaimTypeEnum } from './claim.schema';
 
 export type ClaimStateHistoryDocument = ClaimStateHistory & Document;
 
@@ -33,6 +33,9 @@ export class ClaimStateHistory {
   @Prop({ type: String, enum: Object.values(ClaimStatusEnum), required: true })
   claimStatus: ClaimStatusEnum;
 
+  @Prop({ type: String, enum: Object.values(ClaimTypeEnum), required: true })
+  claimType: ClaimTypeEnum;
+
   @Prop({ type: String, enum: Object.values(ClaimPriorityEnum), required: true })
   priority: ClaimPriorityEnum;
 
@@ -42,15 +45,8 @@ export class ClaimStateHistory {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   user: Types.ObjectId;
 
-  @Prop({ type: Object })
-  area?: {
-    _id?: Types.ObjectId;
-    name?: string;
-    subarea?: {
-      _id?: Types.ObjectId;
-      name?: string;
-    };
-  };
+  @Prop({ type: Types.ObjectId, ref: 'SubArea' })
+  subarea?: Types.ObjectId;
 
   @Prop()
   createdAt?: Date;

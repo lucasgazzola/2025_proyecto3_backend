@@ -29,23 +29,13 @@ export class Claim {
   @Prop({ required: true })
   description: string;
 
-  @Prop()
-  finalResolution?: string;
-
   @Prop({ type: Types.ObjectId, ref: 'Project', required: true })
   project: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   user: Types.ObjectId;
 
-  @Prop({ type: String, enum: Object.values(ClaimPriorityEnum), required: true })
-  priority: ClaimPriorityEnum;
-
-  @Prop({ type: String, enum: Object.values(ClaimCriticalityEnum), required: true })
-  criticality: ClaimCriticalityEnum;
-
-  @Prop({ type: String, enum: Object.values(ClaimTypeEnum), required: true })
-  claimType: ClaimTypeEnum;
+  // priority, criticality y claimType ahora se registran en ClaimStateHistory
 
   @Prop({ type: Types.ObjectId, ref: 'SubArea', required: false })
   subarea?: Types.ObjectId;

@@ -12,17 +12,17 @@ export class UpdateClaimDto extends PartialType(CreateClaimDto) {
 	@ApiProperty({ example: ClaimPriority.MEDIUM, enum: ClaimPriority })
 	@IsOptional()
 	@IsEnum(ClaimPriority)
-	priority: ClaimPriority;
+	priority?: ClaimPriority;
 
 	@ApiProperty({ example: ClaimCriticality.MAJOR, enum: ClaimCriticality })
 	@IsOptional()
 	@IsEnum(ClaimCriticality)
-	criticality: ClaimCriticality;
+	criticality?: ClaimCriticality;
 
 	@ApiProperty({ example: ClaimType.TECHNICAL, enum: ClaimType })
 	@IsOptional()
 	@IsEnum(ClaimType)
-	claimType: ClaimType;
+	claimType?: ClaimType;
 
   @ApiProperty({ example: 'Website for client X', required: true })
 	@IsString()
