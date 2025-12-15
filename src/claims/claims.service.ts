@@ -204,11 +204,31 @@ export class ClaimsService {
 
   async getHistory(claimId: string) {
     if (!Types.ObjectId.isValid(claimId)) throw new NotFoundException('Claim not found');
-    return this.historyModel
+    const histories = await this.historyModel
       .find({ claim: new Types.ObjectId(claimId) })
       .populate({ path: 'user', select: 'email firstName lastName role phone' })
       .lean()
       .exec();
+
+    return (histories || []).map((h: any) => {
+      let subareaSnapshot: any = undefined;
+      if (h?.area?.subarea && h?.area?._id && h?.area?.name) {
+        subareaSnapshot = {
+          _id: h.area.subarea._id,
+          name: h.area.subarea.name,
+          area: {
+            _id: h.area._id,
+            name: h.area.name,
+          },
+        };
+      }
+
+      const { area, ...rest } = h as Record<string, unknown>;
+      return {
+        ...rest,
+        ...(subareaSnapshot ? { subarea: subareaSnapshot } : {}),
+      };
+    });
   }
 
   async postMessage(
