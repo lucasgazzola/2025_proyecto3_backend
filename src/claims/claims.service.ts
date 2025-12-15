@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Claim, ClaimDocument } from '../mongoose/schemas/claim.schema';
+import { Claim, ClaimCriticalityEnum, ClaimDocument, ClaimPriorityEnum, ClaimTypeEnum } from '../mongoose/schemas/claim.schema';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimStateHistory, ClaimStateHistoryDocument, ClaimStatusEnum } from '../mongoose/schemas/claim-state-history.schema';
@@ -65,18 +65,38 @@ export class ClaimsService {
       (claims || []).map(async (claim: any) => {
         const lastHistory = await this.historyModel
           .findOne({ claim: new Types.ObjectId(claim._id) })
-          .sort({ startDate: -1 })
-          .select('claimStatus startDate area')
+          .sort({ createdAt: -1 })
+          .select('priority criticality claimType claimStatus startDate area')
           .lean()
           .exec();
 
         const latestStatus: ClaimStatusEnum | undefined = lastHistory?.claimStatus;
+        const latestType: ClaimTypeEnum | undefined = lastHistory?.claimType;
+        const latestPriority: ClaimPriorityEnum | undefined = lastHistory?.priority;
+        const latestCriticality: ClaimCriticalityEnum | undefined = lastHistory?.criticality;
         // remove `area` from the returned claim (we store area snapshots in histories instead)
         const { history, area, ...rest } = claim as Record<string, unknown>;
+
+        // Transform snapshot to desired shape: subarea with nested area
+        let subareaSnapshot: any = undefined;
+        if (lastHistory?.area?.subarea && lastHistory?.area?._id && lastHistory?.area?.name) {
+          subareaSnapshot = {
+            _id: lastHistory.area.subarea._id,
+            name: lastHistory.area.subarea.name,
+            area: {
+              _id: lastHistory.area._id,
+              name: lastHistory.area.name,
+            },
+          };
+        }
+
         return {
           ...rest,
           claimStatus: latestStatus,
-          area: lastHistory?.area,
+          claimType: latestType,
+          priority: latestPriority,
+          criticality: latestCriticality,
+          ...(subareaSnapshot ? { subarea: subareaSnapshot } : {}),
         };
       }),
     );
