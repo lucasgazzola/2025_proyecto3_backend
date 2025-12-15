@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Claim, ClaimDocument } from '../mongoose/schemas/claim.schema';
+import { Claim, ClaimCriticalityEnum, ClaimDocument, ClaimPriorityEnum, ClaimTypeEnum } from '../mongoose/schemas/claim.schema';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimStateHistory, ClaimStateHistoryDocument, ClaimStatusEnum } from '../mongoose/schemas/claim-state-history.schema';
@@ -68,17 +68,23 @@ export class ClaimsService {
       (claims || []).map(async (claim: any) => {
         const lastHistory = await this.historyModel
           .findOne({ claim: new Types.ObjectId(claim._id) })
-          .sort({ startDate: -1 })
-          .select('claimStatus startDate area')
+          .sort({ createdAt: -1 })
+          .select('priority criticality claimType claimStatus startDate area')
           .lean()
           .exec();
 
         const latestStatus: ClaimStatusEnum | undefined = lastHistory?.claimStatus;
+        const latestType: ClaimTypeEnum | undefined = lastHistory?.claimType;
+        const latestPriority: ClaimPriorityEnum | undefined = lastHistory?.priority;
+        const latestCriticality: ClaimCriticalityEnum | undefined = lastHistory?.criticality;
         // remove `area` from the returned claim (we store area snapshots in histories instead)
         const { history, area, ...rest } = claim as Record<string, unknown>;
         return {
           ...rest,
           claimStatus: latestStatus,
+          claimType: latestType,
+          priority: latestPriority,
+          criticality: latestCriticality,
           area: lastHistory?.area,
         };
       }),
@@ -111,7 +117,7 @@ export class ClaimsService {
       .sort({ createdAt: -1 })
       .lean()
       .exec();
-
+    
     if (lastHistory?.claimStatus === ClaimStatusEnum.RESOLVED) {
       throw new ConflictException('This claim has been resolved and cannot be updated.');
     }

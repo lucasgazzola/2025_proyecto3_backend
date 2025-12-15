@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { ClaimPriorityEnum, ClaimCriticalityEnum } from './claim.schema';
+import { ClaimPriorityEnum, ClaimCriticalityEnum, ClaimTypeEnum } from './claim.schema';
 
 export type ClaimStateHistoryDocument = ClaimStateHistory & Document;
 
@@ -29,6 +29,9 @@ export class ClaimStateHistory {
 
   @Prop({ type: Types.ObjectId, ref: 'Claim', required: true })
   claim: Types.ObjectId;
+
+  @Prop({ type: String, enum: Object.values(ClaimTypeEnum), required: true })
+  claimType: ClaimTypeEnum;
 
   @Prop({ type: String, enum: Object.values(ClaimStatusEnum), required: true })
   claimStatus: ClaimStatusEnum;

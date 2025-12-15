@@ -54,7 +54,6 @@ export class ClaimsController {
     if (user.role !== Role.USER) {
       throw new UnauthorizedException('Only users with USER role can update claims');
     }
-
     return this.claimsService.updateWithHistory(id, updateClaimDto, user);
   }
 
