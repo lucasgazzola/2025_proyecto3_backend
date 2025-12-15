@@ -45,15 +45,8 @@ export class ClaimStateHistory {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   user: Types.ObjectId;
 
-  @Prop({ type: Object })
-  area?: {
-    _id?: Types.ObjectId;
-    name?: string;
-    subarea?: {
-      _id?: Types.ObjectId;
-      name?: string;
-    };
-  };
+  @Prop({ type: Types.ObjectId, ref: 'SubArea' })
+  subarea?: Types.ObjectId;
 
   @Prop()
   createdAt?: Date;

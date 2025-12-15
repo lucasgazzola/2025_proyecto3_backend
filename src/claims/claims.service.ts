@@ -66,7 +66,8 @@ export class ClaimsService {
         const lastHistory = await this.historyModel
           .findOne({ claim: new Types.ObjectId(claim._id) })
           .sort({ createdAt: -1 })
-          .select('priority criticality claimType claimStatus startDate area')
+          .select('priority criticality claimType claimStatus startDate subarea')
+          .populate({ path: 'subarea', select: 'name area', populate: { path: 'area', select: 'name' } })
           .lean()
           .exec();
 
@@ -74,18 +75,18 @@ export class ClaimsService {
         const latestType: ClaimTypeEnum | undefined = lastHistory?.claimType;
         const latestPriority: ClaimPriorityEnum | undefined = lastHistory?.priority;
         const latestCriticality: ClaimCriticalityEnum | undefined = lastHistory?.criticality;
-        // remove `area` from the returned claim (we store area snapshots in histories instead)
-        const { history, area, ...rest } = claim as Record<string, unknown>;
+        // removemos `history` del claim base, el subarea se arma desde el último historial
+        const { history, ...rest } = claim as Record<string, unknown>;
 
         // Transform snapshot to desired shape: subarea with nested area
         let subareaSnapshot: any = undefined;
-        if (lastHistory?.area?.subarea && lastHistory?.area?._id && lastHistory?.area?.name) {
+        if (lastHistory?.subarea) {
           subareaSnapshot = {
-            _id: lastHistory.area.subarea._id,
-            name: lastHistory.area.subarea.name,
+            _id: (lastHistory.subarea as any)._id,
+            name: (lastHistory.subarea as any).name,
             area: {
-              _id: lastHistory.area._id,
-              name: lastHistory.area.name,
+              _id: (lastHistory.subarea as any).area?._id,
+              name: (lastHistory.subarea as any).area?.name,
             },
           };
         }
@@ -106,16 +107,38 @@ export class ClaimsService {
 
   async findOne(id: string) {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Claim not found');
-    return this.claimModel
+    const claim = await this.claimModel
       .findById(id)
       .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
       .populate({
         path: 'history',
-        select: 'action startTime endTime startDate endDate claimStatus priority criticality user area',
-        populate: { path: 'user', select: 'email firstName lastName role phone' },
+        select: 'action startTime endTime startDate endDate claimStatus priority criticality user subarea',
+        populate: [
+          { path: 'user', select: 'email firstName lastName role phone' },
+          { path: 'subarea', select: 'name area', populate: { path: 'area', select: 'name' } },
+        ],
       })
       .lean()
       .exec();
+
+    // Ajustar el shape de cada entrada del historial a { subarea: { _id, name, area: { _id, name } } }
+    if (claim?.history && Array.isArray(claim.history)) {
+      claim.history = (claim.history as any[]).map((h: any) => {
+        const sub = h?.subarea
+          ? {
+              _id: h.subarea._id,
+              name: h.subarea.name,
+              area: h.subarea.area ? { _id: h.subarea.area._id, name: h.subarea.area.name } : undefined,
+            }
+          : undefined;
+        return {
+          ...h,
+          ...(sub ? { subarea: sub } : {}),
+        };
+      });
+    }
+
+    return claim;
   }
 
   async updateWithHistory(id: string, updateClaimDto: UpdateClaimDto, currentUser?: { id?: string; _id?: string }) {
@@ -149,21 +172,12 @@ export class ClaimsService {
     if (!updated) throw new NotFoundException('Claim not found');
 
     // Registrar SIEMPRE una nueva entrada en el historial en cada actualización
-    // Como el área ya no viene en el DTO, derivamos el área desde la subárea (si se envía)
-    let areaSnapshot: undefined | { _id: Types.ObjectId; name: string; subarea?: { _id: Types.ObjectId; name: string } } = undefined;
+    // Guardar referencia a la subárea (que ya está asociada a un área vía relación)
+    let subareaIdToStore: Types.ObjectId | undefined = undefined;
     if (updateClaimDto.subarea && Types.ObjectId.isValid(updateClaimDto.subarea)) {
-      const subDoc = await this.subAreaModel
-        .findById(updateClaimDto.subarea)
-        .populate({ path: 'area', select: 'name' })
-        .lean()
-        .exec();
-      if (subDoc && subDoc.area && (subDoc.area as any)._id) {
-        areaSnapshot = {
-          _id: (subDoc.area as any)._id,
-          name: (subDoc.area as any).name,
-          subarea: { _id: subDoc._id, name: subDoc.name },
-        };
-      }
+      subareaIdToStore = new Types.ObjectId(updateClaimDto.subarea);
+    } else if ((updated as any)?.subarea) {
+      subareaIdToStore = new Types.ObjectId(String((updated as any).subarea));
     }
 
     // Cerrar el historial previo (si existe) estableciendo fecha de fin
@@ -184,17 +198,33 @@ export class ClaimsService {
       criticality: updateClaimDto.criticality,
       claimType: updateClaimDto.claimType,
       user: new Types.ObjectId(currentUser?.id ?? currentUser?._id ?? String(updated.user)),
-      ...(areaSnapshot ? { area: areaSnapshot } : {}),
+      ...(subareaIdToStore ? { subarea: subareaIdToStore } : {}),
     });
     await history.save();
     await this.claimModel.findByIdAndUpdate(id, { $push: { history: history._id } });
 
-    // Devolver el claim actualizado enriquecido con el último estado y el snapshot de área
+    // Devolver el claim actualizado enriquecido con el último estado y el snapshot de subarea+area
     const fullClaim = await this.findOne(id);
+    let subareaSnapshot: any = undefined;
+    if (subareaIdToStore) {
+      const sub = await this.subAreaModel
+        .findById(subareaIdToStore)
+        .populate({ path: 'area', select: 'name' })
+        .lean()
+        .exec();
+      if (sub) {
+        subareaSnapshot = {
+          _id: sub._id,
+          name: sub.name,
+          area: sub.area ? { _id: (sub.area as any)._id, name: (sub.area as any).name } : undefined,
+        };
+      }
+    }
+
     return {
       ...fullClaim,
       claimStatus: history.claimStatus,
-      area: history.area,
+      ...(subareaSnapshot ? { subarea: subareaSnapshot } : {}),
     };
   }
 
@@ -207,26 +237,22 @@ export class ClaimsService {
     const histories = await this.historyModel
       .find({ claim: new Types.ObjectId(claimId) })
       .populate({ path: 'user', select: 'email firstName lastName role phone' })
+      .populate({ path: 'subarea', select: 'name area', populate: { path: 'area', select: 'name' } })
       .lean()
       .exec();
 
     return (histories || []).map((h: any) => {
-      let subareaSnapshot: any = undefined;
-      if (h?.area?.subarea && h?.area?._id && h?.area?.name) {
-        subareaSnapshot = {
-          _id: h.area.subarea._id,
-          name: h.area.subarea.name,
-          area: {
-            _id: h.area._id,
-            name: h.area.name,
-          },
-        };
-      }
-
-      const { area, ...rest } = h as Record<string, unknown>;
+      const sub = h?.subarea
+        ? {
+            _id: h.subarea._id,
+            name: h.subarea.name,
+            area: h.subarea.area ? { _id: h.subarea.area._id, name: h.subarea.area.name } : undefined,
+          }
+        : undefined;
+      const { /* keep others intact */ ...rest } = h as Record<string, unknown>;
       return {
         ...rest,
-        ...(subareaSnapshot ? { subarea: subareaSnapshot } : {}),
+        ...(sub ? { subarea: sub } : {}),
       };
     });
   }
