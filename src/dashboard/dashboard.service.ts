@@ -35,6 +35,16 @@ export class DashboardService {
     return base;
   }
 
+  async getReportsForUser(userId: string, filters: DashboardFiltersDto) {
+    // Filtros para que el USER vea solo reclamos donde figura como responsable en historial actual
+    const mergedFilters: DashboardFiltersDto = {
+      ...filters,
+      responsibleUserId: userId,
+    };
+    const base = await this.buildReports(mergedFilters);
+    return base;
+  }
+
   private buildDateMatch(filter: DashboardFiltersDto, field: string) {
     const match: any = {};
     if (filter.fromDate || filter.toDate) {
