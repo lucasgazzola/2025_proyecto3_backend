@@ -10,6 +10,7 @@ import { Project, ProjectDocument } from '../mongoose/schemas/project.schema';
 import { Area, AreaDocument } from '../mongoose/schemas/area.schema';
 import { SubArea, SubAreaDocument } from '../mongoose/schemas/subarea.schema';
 import { ClaimMessage, ClaimMessageDocument } from '../mongoose/schemas/claim-message.schema';
+import { Payload } from 'src/common/interfaces/payload';
 
 @Injectable()
 export class ClaimsService {
@@ -38,6 +39,7 @@ export class ClaimsService {
       startDate: new Date(),
       claim: claim._id,
       claimStatus: ClaimStatusEnum.PENDING,
+      claimType: createClaimDto.claimType,
       priority: createClaimDto.priority,
       criticality: createClaimDto.criticality,
       user: claim.user,
@@ -259,7 +261,7 @@ export class ClaimsService {
 
   async postMessage(
     claimId: string,
-    user: Partial<User> & { id?: string; _id?: Types.ObjectId | string },
+    user: Payload & { id?: string; _id?: Types.ObjectId | string },
     body: { content: string; state: 'PRIVADO' | 'PUBLICO' },
   ) {
     const msg = new this.messageModel({
