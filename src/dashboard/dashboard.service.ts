@@ -35,6 +35,16 @@ export class DashboardService {
     return base;
   }
 
+  async getReportsForUser(userId: string, filters: DashboardFiltersDto) {
+    // Filtros para que el USER vea solo reclamos donde figura como responsable en historial actual
+    const mergedFilters: DashboardFiltersDto = {
+      ...filters,
+      responsibleUserId: userId,
+    };
+    const base = await this.buildReports(mergedFilters);
+    return base;
+  }
+
   private buildDateMatch(filter: DashboardFiltersDto, field: string) {
     const match: any = {};
     if (filter.fromDate || filter.toDate) {
@@ -46,6 +56,7 @@ export class DashboardService {
   }
 
   private async buildReports(filters: DashboardFiltersDto) {
+    // Filtros base sobre Claims
     const claimMatch: any = {};
     Object.assign(claimMatch, this.buildDateMatch(filters, 'createdAt'));
 
@@ -54,9 +65,6 @@ export class DashboardService {
     }
     if (filters.projectId) {
       claimMatch['project'] = new Types.ObjectId(filters.projectId);
-    }
-    if (filters.claimType) {
-      claimMatch['claimType'] = filters.claimType;
     }
     if (filters.search) {
       claimMatch['description'] = { $regex: filters.search, $options: 'i' };
@@ -99,38 +107,45 @@ export class DashboardService {
       .exec();
 
     // 2) Estado actual: pendientes/en curso/resueltos
+    // Estado actual basado en historial vigente (endDate null)
     const historyMatch: any = { endDate: null };
     Object.assign(historyMatch, this.buildDateMatch(filters, 'startDate'));
 
-    // Filtros por área/subárea/responsable
-    if (filters.areaId) historyMatch['area._id'] = new Types.ObjectId(filters.areaId);
-    if (filters.subareaId) historyMatch['area.subarea._id'] = new Types.ObjectId(filters.subareaId);
+    // Filtros por subárea/responsable en historial actual
+    if (filters.subareaId) historyMatch['subarea'] = new Types.ObjectId(filters.subareaId);
     if (filters.responsibleUserId) historyMatch['user'] = new Types.ObjectId(filters.responsibleUserId);
 
-    const currentStatusAgg = await this.historyModel
+    // Estado actual usando el ÚLTIMO historial por reclamo (independiente de endDate)
+    const currentStatusAgg = await this.claimModel
       .aggregate([
-        { $match: historyMatch },
-        // join claim -> project + type filters
+        { $match: claimMatch },
+        ...claimLookupProject,
+        // traer historiales del reclamo
         {
           $lookup: {
-            from: 'claims',
-            localField: 'claim',
-            foreignField: '_id',
-            as: 'claimDoc',
+            from: 'claimstatehistories',
+            localField: '_id',
+            foreignField: 'claim',
+            as: 'histories',
           },
         },
-        { $unwind: '$claimDoc' },
-        ...claimLookupProject.map((step) => ({
-          ...(step.$lookup
-            ? step
-            : step.$match
-            ? step
-            : step),
-        })),
-        ...(filters.claimType ? [{ $match: { 'claimDoc.claimType': filters.claimType } }] : []),
+        // ordenar historiales por createdAt desc
+        { $unwind: '$histories' },
+        { $sort: { 'histories.createdAt': -1 } },
+        // tomar el último historial por reclamo
         {
           $group: {
-            _id: '$claimStatus',
+            _id: '$_id',
+            latestStatus: { $first: '$histories.claimStatus' },
+            latestType: { $first: '$histories.claimType' },
+          },
+        },
+        // filtrar por claimType si corresponde
+        ...(filters.claimType ? [{ $match: { latestType: filters.claimType } }] : []),
+        // agrupar por estado
+        {
+          $group: {
+            _id: '$latestStatus',
             count: { $sum: 1 },
           },
         },
@@ -165,6 +180,7 @@ export class DashboardService {
                 $cond: [{ $eq: ['$claimStatus', 'RESOLVED'] }, '$endDate', null],
               },
             },
+            claimType: { $max: '$claimType' },
           },
         },
         { $match: { pendingStart: { $ne: null }, resolvedEnd: { $ne: null } } },
@@ -178,10 +194,10 @@ export class DashboardService {
         },
         { $unwind: '$claimDoc' },
         ...claimLookupProject,
-        ...(filters.claimType ? [{ $match: { 'claimDoc.claimType': filters.claimType } }] : []),
+        ...(filters.claimType ? [{ $match: { claimType: filters.claimType } }] : []),
         {
           $project: {
-            claimType: '$claimDoc.claimType',
+            claimType: '$claimType',
             diffHours: {
               $divide: [{ $subtract: ['$resolvedEnd', '$pendingStart'] }, 1000 * 60 * 60],
             },
@@ -204,11 +220,29 @@ export class DashboardService {
         { $match: { ...historyMatch } },
         {
           $group: {
-            _id: { id: '$area._id', name: '$area.name' },
+            _id: '$subarea',
             count: { $sum: 1 },
           },
         },
-        { $project: { _id: 0, areaId: '$_id.id', areaName: '$_id.name', count: 1 } },
+        {
+          $lookup: {
+            from: 'subareas',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'subareaDoc',
+          },
+        },
+        { $unwind: '$subareaDoc' },
+        {
+          $lookup: {
+            from: 'areas',
+            localField: 'subareaDoc.area',
+            foreignField: '_id',
+            as: 'areaDoc',
+          },
+        },
+        { $unwind: '$areaDoc' },
+        { $project: { _id: 0, areaId: '$areaDoc._id', areaName: '$areaDoc.name', subareaId: '$subareaDoc._id', subareaName: '$subareaDoc.name', count: 1 } },
       ])
       .exec();
 
@@ -222,10 +256,20 @@ export class DashboardService {
       .exec();
 
     // 6) Tipos de reclamo más comunes
-    const commonClaimTypes = await this.claimModel
+    const commonClaimTypes = await this.historyModel
       .aggregate([
-        { $match: claimMatch },
+        { $match: { ...historyMatch } },
+        {
+          $lookup: {
+            from: 'claims',
+            localField: 'claim',
+            foreignField: '_id',
+            as: 'claimDoc',
+          },
+        },
+        { $unwind: '$claimDoc' },
         ...claimLookupProject,
+        ...(filters.claimType ? [{ $match: { claimType: filters.claimType } }] : []),
         { $group: { _id: '$claimType', count: { $sum: 1 } } },
         { $project: { _id: 0, claimType: '$_id', count: 1 } },
         { $sort: { count: -1 } },

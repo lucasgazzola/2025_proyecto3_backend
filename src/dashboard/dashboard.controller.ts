@@ -21,7 +21,7 @@ export class DashboardController {
 
   @Get('reports')
   @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.AUDITOR, Role.CUSTOMER)
+  @Roles(Role.ADMIN, Role.AUDITOR, Role.CUSTOMER, Role.USER)
   @ApiOperation({ summary: 'Reportes y métricas filtrables por rol' })
   @ApiResponse({ status: 200, description: 'Métricas agregadas según el rol' })
   async getReports(
@@ -33,6 +33,9 @@ export class DashboardController {
     }
     if (user.role === Role.CUSTOMER) {
       return this.dashboardService.getReportsForCustomer(user.id, filters);
+    }
+    if (user.role === Role.USER) {
+      return this.dashboardService.getReportsForUser(user.id, filters);
     }
     throw new ForbiddenException('Rol no soportado para reportes');
   }
