@@ -17,6 +17,11 @@ import { JwtAuthGuard } from '../auth/auth-roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { Role } from 'src/common/enums/roles.enums';
 import { type Payload } from 'src/common/interfaces/payload';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { diskStorage } from 'multer';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @ApiTags('claims')
 @UseGuards(JwtAuthGuard)
@@ -91,5 +96,37 @@ export class ClaimsController {
   @ApiResponse({ status: 200, description: 'Deletion acknowledgment' })
   remove(@Param('id') id: string) {
     return this.claimsService.remove(id);
+  }
+
+  @Post(':id/files')
+  @ApiOperation({ summary: 'Upload up to 2 files for a claim' })
+  @ApiResponse({ status: 201, description: 'Files uploaded and associated to claim' })
+  @UseInterceptors(
+    FilesInterceptor('files', 2, {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const uploadPath = path.join(process.cwd(), 'uploads');
+          if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+          cb(null, uploadPath);
+        },
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = path.extname(file.originalname);
+          const base = path.basename(file.originalname, ext);
+          cb(null, `${base}-${unique}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        const allowed = /(\.(png|jpg|jpeg|pdf))$/i;
+        if (allowed.test(file.originalname)) return cb(null, true);
+        cb(new Error('Only images (png,jpg,jpeg) or PDF are allowed'), false);
+      },
+    }),
+  )
+  async uploadFiles(
+    @Param('id') id: string,
+    @UploadedFiles() files: any[],
+  ) {
+    return this.claimsService.attachFilesToClaim(id, files);
   }
 }

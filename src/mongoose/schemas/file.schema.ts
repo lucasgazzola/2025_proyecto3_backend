@@ -13,6 +13,9 @@ export class File {
   @Prop({ required: true })
   name: string;
 
+  @Prop({ required: true })
+  url: string;
+
   @Prop({ type: String, enum: Object.values(FileTypeEnum), required: true })
   fileType: FileTypeEnum;
 

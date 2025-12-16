@@ -10,6 +10,7 @@ import { Project, ProjectDocument } from '../mongoose/schemas/project.schema';
 import { Area, AreaDocument } from '../mongoose/schemas/area.schema';
 import { SubArea, SubAreaDocument } from '../mongoose/schemas/subarea.schema';
 import { ClaimMessage, ClaimMessageDocument } from '../mongoose/schemas/claim-message.schema';
+import { File as FileEntity, FileDocument, FileTypeEnum } from '../mongoose/schemas/file.schema';
 import { Payload } from 'src/common/interfaces/payload';
 
 @Injectable()
@@ -22,6 +23,7 @@ export class ClaimsService {
     @InjectModel(Area.name) private areaModel: Model<AreaDocument>,
     @InjectModel(SubArea.name) private subAreaModel: Model<SubAreaDocument>,
     @InjectModel(ClaimMessage.name) private messageModel: Model<ClaimMessageDocument>,
+    @InjectModel(FileEntity.name) private fileModel: Model<FileDocument>,
   ) {}
 
   async create(createClaimDto: CreateClaimDto, userId: string) {
@@ -279,5 +281,36 @@ export class ClaimsService {
       .populate({ path: 'user', select: 'firstName lastName' })
       .lean()
       .exec();
+  }
+
+  async attachFilesToClaim(claimId: string, files?: any[]) {
+    if (!Types.ObjectId.isValid(claimId)) throw new NotFoundException('Claim not found');
+    const claim = await this.claimModel.findById(claimId).exec();
+    if (!claim) throw new NotFoundException('Claim not found');
+
+    const maxFiles = 2;
+    const incoming = files || [];
+    if (incoming.length === 0) throw new BadRequestException('No files uploaded');
+    if (incoming.length > maxFiles) throw new BadRequestException('Maximum 2 files allowed');
+
+    const toCreate = await Promise.all(
+      incoming.map(async (f) => {
+        const ext = (f.originalname.split('.').pop() || '').toLowerCase();
+        const type: FileTypeEnum = ['png', 'jpg', 'jpeg'].includes(ext)
+          ? FileTypeEnum.IMAGE
+          : FileTypeEnum.PDF;
+        const publicUrl = `/uploads/${f.filename}`;
+        const created = new this.fileModel({ name: f.originalname, fileType: type, url: publicUrl });
+        return created.save();
+      }),
+    );
+
+    const ids = toCreate.map((doc) => doc._id);
+    await this.claimModel.findByIdAndUpdate(claimId, { $push: { files: { $each: ids } } }).exec();
+
+    return {
+      claimId,
+      files: toCreate.map((doc) => ({ _id: doc._id, name: doc.name, fileType: doc.fileType, url: doc.url })),
+    };
   }
 }
