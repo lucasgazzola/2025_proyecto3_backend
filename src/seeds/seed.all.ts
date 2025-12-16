@@ -72,46 +72,117 @@ async function run() {
   const areas = await AreaModel.find().lean();
   const subareas = await SubAreaModel.find().lean();
 
-  // Users
-  const firstNames = ['Lucas', 'Ana', 'Maria', 'Juan', 'Sofia', 'Diego', 'Carla', 'Pedro', 'Florencia', 'Martin'];
-  const lastNames = ['Garcia', 'Fernandez', 'Gomez', 'Rodriguez', 'Lopez', 'Martinez', 'Perez', 'Sanchez', 'Romero', 'Alonso'];
-  const roles = [RoleEnum.USER, RoleEnum.CUSTOMER, RoleEnum.AUDITOR, RoleEnum.ADMIN];
+  // Users base
+  const firstNames = ['Lucas', 'Ana', 'Maria', 'Juan', 'Sofia', 'Diego', 'Carla', 'Pedro', 'Florencia', 'Martin', 'Alvaro', 'Camila', 'Jorge', 'Valentina', 'Nicolas', 'Lucia', 'Federico', 'Gabriela', 'Santiago', 'Julieta'];
+  const lastNames = ['Garcia', 'Fernandez', 'Gomez', 'Rodriguez', 'Lopez', 'Martinez', 'Perez', 'Sanchez', 'Romero', 'Alonso', 'Torres', 'Ruiz', 'Diaz', 'Vargas', 'Castro', 'Rojas', 'Silva', 'Mendez', 'Cruz', 'Ortiz'];
+
   const usersCreated: Types.ObjectId[] = [];
   const customers: Types.ObjectId[] = [];
   const usersRoleUser: Types.ObjectId[] = [];
-  for (let i = 0; i < 80; i++) {
-    const fn = rand(firstNames); const ln = rand(lastNames);
-    const email = `${fn}.${ln}.${i}@example.com`.toLowerCase();
-    const role = rand(roles);
+
+  // Specific users
+  const specificUsers = [
+    { email: 'administrador1@example.com', password: 'Administrador1pass', role: RoleEnum.ADMIN, firstName: 'Admin', lastName: 'Uno' },
+    { email: 'user1@example.com', password: 'User1pass', role: RoleEnum.USER, firstName: 'User', lastName: 'Uno' },
+    { email: 'auditor1@example.com', password: 'Auditor1pass', role: RoleEnum.AUDITOR, firstName: 'Auditor', lastName: 'Uno' },
+    { email: 'customer1@example.com', password: 'Customer1pass', role: RoleEnum.CUSTOMER, firstName: 'Customer', lastName: 'Uno' },
+  ];
+
+  const specificIds: Record<string, Types.ObjectId> = {};
+  for (const s of specificUsers) {
+    const hashed = await bcrypt.hash(s.password, 10);
     const sub = rand(subareas);
-    const plain = 'Password123!';
-    const hashed = await bcrypt.hash(plain, 10);
-    const user = await UserModel.create({
+    const u = await UserModel.create({
+      firstName: s.firstName,
+      lastName: s.lastName,
+      email: s.email,
+      password: hashed,
+      phone: `+54 9 11 ${Math.floor(10000000 + Math.random()*89999999)}`,
+      role: s.role,
+      subArea: sub?._id ?? null,
+    });
+    usersCreated.push(u._id);
+    specificIds[s.email] = u._id;
+    if (s.role === RoleEnum.CUSTOMER) customers.push(u._id);
+    if (s.role === RoleEnum.USER) usersRoleUser.push(u._id);
+  }
+
+  // 40 customers base
+  for (let i = 0; i < 40; i++) {
+    const fn = rand(firstNames); const ln = rand(lastNames);
+    const email = `${fn}.${ln}.customer.${i}@example.com`.toLowerCase();
+    const sub = rand(subareas);
+    const hashed = await bcrypt.hash('Password123!', 10);
+    const u = await UserModel.create({
       firstName: fn,
       lastName: ln,
       email,
       password: hashed,
       phone: `+54 9 11 ${Math.floor(10000000 + Math.random()*89999999)}`,
-      role,
+      role: RoleEnum.CUSTOMER,
       subArea: sub?._id ?? null,
     });
-    usersCreated.push(user._id);
-    if (role === RoleEnum.CUSTOMER) customers.push(user._id);
-    if (role === RoleEnum.USER) usersRoleUser.push(user._id);
+    usersCreated.push(u._id);
+    customers.push(u._id);
   }
 
-  // Projects
+  // Extra role users (for variety and histories)
+  const createRoleUsers = async (role: RoleEnum, count: number) => {
+    for (let i = 0; i < count; i++) {
+      const fn = rand(firstNames); const ln = rand(lastNames);
+      const email = `${fn}.${ln}.${role}.${i}@example.com`.toLowerCase();
+      const sub = rand(subareas);
+      const hashed = await bcrypt.hash('Password123!', 10);
+      const u = await UserModel.create({
+        firstName: fn,
+        lastName: ln,
+        email,
+        password: hashed,
+        phone: `+54 9 11 ${Math.floor(10000000 + Math.random()*89999999)}`,
+        role,
+        subArea: sub?._id ?? null,
+      });
+      usersCreated.push(u._id);
+      if (role === RoleEnum.USER) usersRoleUser.push(u._id);
+    }
+  };
+  await createRoleUsers(RoleEnum.USER, 15);
+  await createRoleUsers(RoleEnum.ADMIN, 5);
+  await createRoleUsers(RoleEnum.AUDITOR, 5);
+
+  // Projects: up to 4 per base customer, and 5 for specific customer
   const projectTypes = Object.values(ProjectTypeEnum);
   const projectsCreated: { id: Types.ObjectId; owner: Types.ObjectId }[] = [];
-  for (let i = 0; i < 60; i++) {
-    const owner = rand(customers.length ? customers : usersCreated);
-    const proj = await ProjectModel.create({
-      title: `Proyecto ${i + 1}`,
-      description: `Descripción del proyecto ${i + 1}`,
-      user: owner,
-      projectType: rand(projectTypes),
-    });
-    projectsCreated.push({ id: proj._id, owner });
+
+  // 5 projects for specific customer1
+  const customer1Id = specificIds['customer1@example.com'];
+  if (customer1Id) {
+    for (let i = 0; i < 5; i++) {
+      const proj = await ProjectModel.create({
+        title: `Proyecto Customer1 - ${i + 1}`,
+        description: `Proyecto del cliente customer1 (${i + 1})`,
+        user: customer1Id,
+        projectType: rand(projectTypes),
+      });
+      projectsCreated.push({ id: proj._id, owner: customer1Id });
+    }
+  }
+
+  // 1-4 projects per each of the 40 customers
+  for (const owner of customers) {
+    // skip customer1 (already created 5)
+    if (customer1Id && String(owner) === String(customer1Id)) continue;
+    const count = 1 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < count; i++) {
+      const idx = projectsCreated.length + 1;
+      const proj = await ProjectModel.create({
+        title: `Proyecto ${idx}`,
+        description: `Descripción del proyecto ${idx}`,
+        user: owner,
+        projectType: rand(projectTypes),
+      });
+      projectsCreated.push({ id: proj._id, owner });
+    }
   }
 
   // Files
@@ -130,113 +201,138 @@ async function run() {
   const criticalities = Object.values(ClaimCriticalityEnum);
   const claimTypes = Object.values(ClaimTypeEnum);
   const claimsCreated: Types.ObjectId[] = [];
-  for (let i = 0; i < 120; i++) {
-    const projectObj = rand(projectsCreated);
-    const project = projectObj.id;
-    const projectOwner = projectObj.owner;
-    const user = rand(customers.length ? customers : usersCreated);
-    const area = rand(areas);
-    const file = Math.random() < 0.4 ? rand(filesCreated) : undefined;
-    const chosenPriority = rand(priorities);
-    const chosenCriticality = rand(criticalities);
-    const chosenClaimType = rand(claimTypes);
-    const claim = await ClaimModel.create({
-      description: `Incidente ${(i + 1)} en ${area.name}`,
-      project,
-      user,
-      // priority/criticality/claimType viven en historial
-      file,
-    });
-    claimsCreated.push(claim._id);
 
-    // Vincular el claim al proyecto (array de claims)
-    await ProjectModel.findByIdAndUpdate(project, { $push: { claims: claim._id } });
+  // Helper to get random date between 2020-01-01 and 2025-12-31
+  const minDate = new Date('2020-01-01T00:00:00.000Z').getTime();
+  const maxDate = new Date('2025-12-31T23:59:59.999Z').getTime();
+  const randomDateBetween = (fromMs?: number): Date => {
+    const startMs = Math.max(minDate, fromMs ?? minDate);
+    const span = Math.max(1, maxDate - startMs);
+    const ms = startMs + Math.floor(Math.random() * span);
+    return new Date(ms);
+  };
 
-    // Crear estado inicial mínimo: "Creado por Customer", PENDING, user = creador del proyecto
-    // Incluimos snapshot de area+subarea en el history (siempre en el seed elegimos un subarea para el area)
-    const subsForArea = subareas.filter((s: any) => String(s.area) === String(area._id));
-    const chosenSub = subsForArea.length ? rand(subsForArea) : undefined;
-    const areaSnapshot = chosenSub
-      ? { _id: area._id, name: area.name, subarea: { _id: chosenSub._id, name: chosenSub.name } }
-      : undefined;
-
-    await ClaimStateHistoryModel.create({
-      action: 'Creado por Customer',
-      startTime: new Date(),
-      startDate: new Date(),
-      claim: claim._id,
-      claimStatus: ClaimStatusEnum.PENDING,
-      priority: chosenPriority,
-      criticality: chosenCriticality,
-      claimType: chosenClaimType,
-      user: projectOwner,
-      ...(areaSnapshot ? { area: areaSnapshot } : {}),
-    });
+  // Create 10 claims for specific customer across their 5 projects
+  if (customer1Id) {
+    const c1Projects = projectsCreated.filter(p => String(p.owner) === String(customer1Id));
+    for (let i = 0; i < 10; i++) {
+      const projectObj = rand(c1Projects);
+      const project = projectObj.id;
+      const chosenPriority = rand(priorities);
+      const chosenCriticality = rand(criticalities);
+      const chosenClaimType = rand(claimTypes);
+      const claim = await ClaimModel.create({
+        description: `Incidente c1-${i + 1}`,
+        project,
+        user: customer1Id,
+      });
+      claimsCreated.push(claim._id);
+      await ProjectModel.findByIdAndUpdate(project, { $push: { claims: claim._id } });
+      const firstStart = randomDateBetween();
+      await ClaimStateHistoryModel.create({
+        action: 'Creado',
+        startTime: firstStart,
+        startDate: firstStart,
+        claim: claim._id,
+        claimStatus: ClaimStatusEnum.PENDING,
+        priority: chosenPriority,
+        criticality: chosenCriticality,
+        claimType: chosenClaimType,
+        user: customer1Id,
+      });
+    }
   }
 
-  // Claim state histories
-  const statuses = Object.values(ClaimStatusEnum);
-  for (const claimId of claimsCreated) {
-    const events = Math.floor(2 + Math.random()*4); // 2-5 eventos
-    let start = new Date(Date.now() - Math.floor(Math.random()*20)*24*60*60*1000);
-    for (let e = 0; e < events; e++) {
-      // Solo usuarios con rol USER pueden editar (crear nueva entrada de historial)
-      const user = rand(usersRoleUser.length ? usersRoleUser : usersCreated);
-      const startTime = new Date(start);
-      const endTime = new Date(startTime.getTime() + Math.floor(Math.random()*48)*60*60*1000);
-      const state = statuses[Math.min(e, statuses.length - 1)];
+  // Create claims for other projects (random 0-4 per project)
+  for (const projectObj of projectsCreated) {
+    // skip projects that already have claims for c1 in the loop above (they will still get more possibly)
+    const createCount = Math.floor(Math.random() * 5); // 0..4
+    for (let i = 0; i < createCount; i++) {
+      const project = projectObj.id;
+      const owner = projectObj.owner; // customer owner
+      const chosenPriority = rand(priorities);
+      const chosenCriticality = rand(criticalities);
+      const chosenClaimType = rand(claimTypes);
+      const claim = await ClaimModel.create({
+        description: `Incidente ${i + 1} del proyecto`,
+        project,
+        user: owner,
+      });
+      claimsCreated.push(claim._id);
+      await ProjectModel.findByIdAndUpdate(project, { $push: { claims: claim._id } });
+      const firstStart = randomDateBetween();
+      await ClaimStateHistoryModel.create({
+        action: 'Creado',
+        startTime: firstStart,
+        startDate: firstStart,
+        claim: claim._id,
+        claimStatus: ClaimStatusEnum.PENDING,
+        priority: chosenPriority,
+        criticality: chosenCriticality,
+        claimType: chosenClaimType,
+        user: owner,
+      });
+    }
+  }
 
-      // Si el último historial está RESOLVED, no agregar nuevos eventos
+  // Additional Claim state histories with chaining logic
+  const statuses = [
+    ClaimStatusEnum.PENDING,
+    ClaimStatusEnum.IN_PROGRESS,
+    ClaimStatusEnum.RESOLVED,
+  ];
+
+  for (const claimId of claimsCreated) {
+    const extraEvents = Math.floor(Math.random() * 4); // 0..3 extra
+    for (let e = 0; e < extraEvents; e++) {
       const lastHistory = await ClaimStateHistoryModel
         .findOne({ claim: claimId })
         .sort({ startDate: -1 })
         .lean();
-      if (lastHistory?.claimStatus === ClaimStatusEnum.RESOLVED) break;
-      // fetch the claim to read its priority/criticality so histories are consistent
-      // leer del último historial para consistencia, si existe
-      const lastHist = await ClaimStateHistoryModel
-        .findOne({ claim: claimId })
-        .sort({ startDate: -1 })
-        .lean();
-      const claimPriority = lastHist?.priority ?? rand(priorities);
-      const claimCriticality = lastHist?.criticality ?? rand(criticalities);
-      const claimType = lastHist?.claimType ?? rand(claimTypes);
+      if (!lastHistory) break;
 
-      // Optionally attach an area+subarea snapshot (must include subarea if area present)
-      const includeArea = Math.random() < 0.4;
-      let areaSnapshot: any = undefined;
-      if (includeArea) {
-        const area = rand(areas);
-        const subsForArea = subareas.filter((s: any) => String(s.area) === String(area._id));
-        if (subsForArea.length) {
-          const chosenSub = rand(subsForArea);
-          areaSnapshot = { _id: area._id, name: area.name, subarea: { _id: chosenSub._id, name: chosenSub.name } };
-        }
-      }
+      // If last is RESOLVED, stop and do not update its endDate
+      if (lastHistory.claimStatus === ClaimStatusEnum.RESOLVED) break;
 
-      // Cerrar historial previo (si existe) antes de crear el nuevo
-      if (lastHistory?._id) {
-        await ClaimStateHistoryModel.findByIdAndUpdate(lastHistory._id, {
-          endTime: endTime,
-          endDate: endTime,
-        });
-      }
+      // Start after last startDate
+      const lastStartMs = new Date(lastHistory.startDate).getTime();
+      const startDate = randomDateBetween(lastStartMs + 60 * 60 * 1000); // at least +1h
+
+      // Close previous linking endDate to new startDate (as requested)
+      await ClaimStateHistoryModel.findByIdAndUpdate(lastHistory._id, {
+        endDate: startDate,
+        endTime: startDate,
+      });
+
+      const claimPriority = lastHistory.priority ?? rand(priorities);
+      const claimCriticality = lastHistory.criticality ?? rand(criticalities);
+      const claimType = lastHistory.claimType ?? rand(claimTypes);
+
+      // Random USER
+      const editor = rand(usersRoleUser.length ? usersRoleUser : usersCreated);
+
+      // Choose next status (prefer progress, possibly resolved at the end)
+      const nextStatus = e === extraEvents - 1 && Math.random() < 0.6
+        ? ClaimStatusEnum.RESOLVED
+        : ClaimStatusEnum.IN_PROGRESS;
+
+      // Subsequent histories must include area + subarea
+      const areaPick = rand(areas);
+      const subsForArea = subareas.filter(s => String(s.area) === String(areaPick._id));
+      const subPick = subsForArea.length ? rand(subsForArea) : undefined;
 
       await ClaimStateHistoryModel.create({
-        action: `Evento ${e + 1}`,
-        startTime,
-        endTime: undefined,
-        startDate: startTime,
-        endDate: undefined,
+        action: nextStatus === ClaimStatusEnum.RESOLVED ? 'Resuelto' : `Actualización ${e + 1}`,
+        startTime: startDate,
+        startDate: startDate,
+        subarea: subPick?._id,
         claim: claimId,
-        claimStatus: state,
+        claimStatus: nextStatus,
         priority: claimPriority,
         criticality: claimCriticality,
         claimType,
-        user,
-        ...(areaSnapshot ? { area: areaSnapshot } : {}),
+        user: editor,
       });
-      start = endTime;
     }
   }
 

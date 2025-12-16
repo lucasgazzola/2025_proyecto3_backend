@@ -4,6 +4,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { USER_REPOSITORY} from './repositories/user.repository.interface';
 import type { IUserRepository } from './repositories/user.repository.interface';
 import { Role } from 'src/common/enums/roles.enums';
+import { User } from './user.entity';
 
 @Injectable()
 export class UsersService {
@@ -52,7 +53,7 @@ export class UsersService {
     return this.repository.findByEmail(email);
   }
 
-  async findByEmailWithPassword(email: string) {
+  async findByEmailWithPassword(email: string): Promise<User | null> {
     return this.repository.findByEmailWithPassword(email);
   }
 }

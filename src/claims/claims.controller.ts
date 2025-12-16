@@ -16,6 +16,7 @@ import { UseGuards, Body as BodyDec } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/auth-roles.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { Role } from 'src/common/enums/roles.enums';
+import { type Payload } from 'src/common/interfaces/payload';
 
 @ApiTags('claims')
 @UseGuards(JwtAuthGuard)
@@ -28,14 +29,17 @@ export class ClaimsController {
   @ApiOperation({ summary: 'Create a new claim' })
   @ApiBody({ type: CreateClaimDto })
   @ApiResponse({ status: 201, description: 'Claim created' })
-  create(@CurrentUser() user: any, @Body() createClaimDto: CreateClaimDto) {
+  create(@CurrentUser() user: Payload, @Body() createClaimDto: CreateClaimDto) {
+    if (user.role !== Role.CUSTOMER) {
+      throw new UnauthorizedException('Only users with CUSTOMER role can create claims');
+    }
     return this.claimsService.create(createClaimDto, user.id);
   }
 
   @Get()
   @ApiOperation({ summary: 'List all claims' })
   @ApiResponse({ status: 200, description: 'Array of claims' })
-  findAll(@CurrentUser() user: any) {
+  findAll(@CurrentUser() user: Payload) {
     return this.claimsService.findAllForUser(user);
   }
 
@@ -50,7 +54,7 @@ export class ClaimsController {
   @ApiOperation({ summary: 'Update a claim' })
   @ApiBody({ type: UpdateClaimDto })
   @ApiResponse({ status: 200, description: 'Updated claim object' })
-  update(@CurrentUser() user: any, @Param('id') id: string, @Body() updateClaimDto: UpdateClaimDto) {
+  update(@CurrentUser() user: Payload, @Param('id') id: string, @Body() updateClaimDto: UpdateClaimDto) {
     if (user.role !== Role.USER) {
       throw new UnauthorizedException('Only users with USER role can update claims');
     }
@@ -70,7 +74,7 @@ export class ClaimsController {
   @Post(':id/message')
   @ApiOperation({ summary: 'Post message on a claim' })
   @ApiResponse({ status: 201, description: 'Message created' })
-  postMessage(@Param('id') id: string, @CurrentUser() user: any, @BodyDec() body: { content: string; state: 'PRIVADO' | 'PUBLICO' }) {
+  postMessage(@Param('id') id: string, @CurrentUser() user: Payload, @BodyDec() body: { content: string; state: 'PRIVADO' | 'PUBLICO' }) {
     return this.claimsService.postMessage(id, user, body);
   }
 
