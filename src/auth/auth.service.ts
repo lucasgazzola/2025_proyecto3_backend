@@ -69,19 +69,19 @@ export class AuthService {
     }
     const isPasswordValid = await bcrypt.compare(
       body.password,
-      (user as any).password,
+      user.password,
     );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const resolvedId = user.id;
+    const resolvedId = user._id;
     if (!resolvedId) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const payload: TokenPayload = {
-      id: user.id,
+      id: user._id,
       role: user.role,
       email: user.email,
       firstName: user.firstName,

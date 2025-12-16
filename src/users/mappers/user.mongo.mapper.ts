@@ -4,7 +4,7 @@ import { UpdateUserDto } from "../dto/update-user.dto";
 import { Types } from "mongoose";
 
 export type UserDomain = {
-    id_: string;
+    _id: string;
     firstName: string;
     lastName: string;
     email: string;
@@ -27,7 +27,7 @@ export class UserMapper {
         if (user == null || user == undefined) return null;
 
         return {
-            id_: user._id.toString(),
+            _id: user._id.toString(),
             firstName: user.firstName,
             lastName: user.lastName,
             email: user.email,
@@ -44,7 +44,7 @@ export class UserMapper {
         if (user == null || user == undefined) return null;
 
         return {
-            id_: user._id.toString(),
+            _id: user._id.toString(),
             firstName: user.firstName,
             lastName: user.lastName,
             email: user.email,
