@@ -26,14 +26,39 @@ export class ClaimsService {
     @InjectModel(FileEntity.name) private fileModel: Model<FileDocument>,
   ) {}
 
-  async create(createClaimDto: CreateClaimDto, userId: string) {
+  private buildAbsoluteUrl(relativeUrl: string): string {
+    const base = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT ?? 3000}`;
+    // asegurar que relativeUrl comience con '/'
+    const rel = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
+    return `${base}${rel}`;
+  }
+
+  async create(createClaimDto: CreateClaimDto, userId: string, files: any[] = []) {
     const created = new this.claimModel({
       description: createClaimDto.description,
       project: new Types.ObjectId(createClaimDto.project),
       user: new Types.ObjectId(userId),
-      // ...(createClaimDto.file && { file: new Types.ObjectId(createClaimDto.file) }),
     });
     const claim = await created.save();
+
+    // Si se cargaron archivos en la creación, procesarlos (máx 2)
+    if (files && files.length > 0) {
+      if (files.length > 2) throw new BadRequestException('Maximum 2 files allowed');
+      const createdFiles = await Promise.all(
+        files.map(async (f) => {
+          const ext = (f.originalname.split('.').pop() || '').toLowerCase();
+          const type: FileTypeEnum = ['png', 'jpg', 'jpeg'].includes(ext)
+            ? FileTypeEnum.IMAGE
+            : FileTypeEnum.PDF;
+          const publicUrl = `/uploads/${f.filename}`;
+          const doc = new this.fileModel({ name: f.originalname, fileType: type, url: publicUrl });
+          return doc.save();
+        })
+      );
+      if (createdFiles.length) {
+        await this.claimModel.findByIdAndUpdate(claim._id, { $push: { files: { $each: createdFiles.map((d) => d._id) } } });
+      }
+    }
 
     const history = new this.historyModel({
       action: 'Creación del reclamo',
@@ -61,6 +86,7 @@ export class ClaimsService {
     const claims = await this.claimModel
       .find(query)
       .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
+      .populate({ path: 'files', select: 'name fileType url' })
       .lean()
       .exec();
 
@@ -80,7 +106,7 @@ export class ClaimsService {
         const latestPriority: ClaimPriorityEnum | undefined = lastHistory?.priority;
         const latestCriticality: ClaimCriticalityEnum | undefined = lastHistory?.criticality;
         // removemos `history` del claim base, el subarea se arma desde el último historial
-        const { history, ...rest } = claim as Record<string, unknown>;
+        const { history, files, ...rest } = claim as any;
 
         // Transform snapshot to desired shape: subarea with nested area
         let subareaSnapshot: any = undefined;
@@ -95,12 +121,18 @@ export class ClaimsService {
           };
         }
 
+        // Mapear URLs absolutas para archivos
+        const filesWithAbsolute = Array.isArray(files)
+          ? files.map((f: any) => ({ _id: f._id, name: f.name, fileType: f.fileType, url: this.buildAbsoluteUrl(f.url) }))
+          : [];
+
         return {
           ...rest,
           claimStatus: latestStatus,
           claimType: latestType,
           priority: latestPriority,
           criticality: latestCriticality,
+          ...(filesWithAbsolute.length ? { files: filesWithAbsolute } : {}),
           ...(subareaSnapshot ? { subarea: subareaSnapshot } : {}),
         };
       }),
@@ -122,6 +154,7 @@ export class ClaimsService {
           { path: 'subarea', select: 'name area', populate: { path: 'area', select: 'name' } },
         ],
       })
+      .populate({ path: 'files', select: 'name fileType url' })
       .lean()
       .exec();
 
@@ -140,6 +173,11 @@ export class ClaimsService {
           ...(sub ? { subarea: sub } : {}),
         };
       });
+    }
+
+    // Mapear archivos a URLs absolutas si existen
+    if (claim && Array.isArray((claim as any).files)) {
+      (claim as any).files = (claim as any).files.map((f: any) => ({ _id: f._id, name: f.name, fileType: f.fileType, url: this.buildAbsoluteUrl(f.url) }));
     }
 
     return claim;
