@@ -35,6 +35,7 @@ export class UserMapper {
             role: user.role,
             subArea: user.subArea ?? null,
             createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
             deletedAt: user.deletedAt
         };
     }
@@ -53,6 +54,7 @@ export class UserMapper {
             role: user.role,
             subArea: user.subArea ?? null,
             createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
             deletedAt: user.deletedAt
         };
     }

@@ -40,8 +40,8 @@ export class Claim {
   @Prop({ type: Types.ObjectId, ref: 'SubArea', required: false })
   subarea?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'File' })
-  file?: Types.ObjectId;
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'File' }], default: [] })
+  files: Types.ObjectId[];
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'ClaimStateHistory' }], default: [] })
   history: Types.ObjectId[];

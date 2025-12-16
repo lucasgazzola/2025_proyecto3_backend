@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { DashboardFiltersDto } from './dto/dashboard-filters.dto';
 import { Roles } from '../auth/roles.decorators';
 import { RolesGuard } from '../auth/roles.guard';
@@ -14,6 +14,7 @@ import { Role } from '../common/enums/roles.enums';
 import { CurrentUser } from 'src/auth/current-user.decorator';
 
 @ApiTags('dashboard')
+@ApiBearerAuth('jwt')
 @Controller('dashboard')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}

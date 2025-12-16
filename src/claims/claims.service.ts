@@ -10,6 +10,7 @@ import { Project, ProjectDocument } from '../mongoose/schemas/project.schema';
 import { Area, AreaDocument } from '../mongoose/schemas/area.schema';
 import { SubArea, SubAreaDocument } from '../mongoose/schemas/subarea.schema';
 import { ClaimMessage, ClaimMessageDocument } from '../mongoose/schemas/claim-message.schema';
+import { File as FileEntity, FileDocument, FileTypeEnum } from '../mongoose/schemas/file.schema';
 import { Payload } from 'src/common/interfaces/payload';
 
 @Injectable()
@@ -22,16 +23,42 @@ export class ClaimsService {
     @InjectModel(Area.name) private areaModel: Model<AreaDocument>,
     @InjectModel(SubArea.name) private subAreaModel: Model<SubAreaDocument>,
     @InjectModel(ClaimMessage.name) private messageModel: Model<ClaimMessageDocument>,
+    @InjectModel(FileEntity.name) private fileModel: Model<FileDocument>,
   ) {}
 
-  async create(createClaimDto: CreateClaimDto, userId: string) {
+  private buildAbsoluteUrl(relativeUrl: string): string {
+    const base = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT ?? 3000}`;
+    // asegurar que relativeUrl comience con '/'
+    const rel = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
+    return `${base}${rel}`;
+  }
+
+  async create(createClaimDto: CreateClaimDto, userId: string, files: any[] = []) {
     const created = new this.claimModel({
       description: createClaimDto.description,
       project: new Types.ObjectId(createClaimDto.project),
       user: new Types.ObjectId(userId),
-      // ...(createClaimDto.file && { file: new Types.ObjectId(createClaimDto.file) }),
     });
     const claim = await created.save();
+
+    // Si se cargaron archivos en la creación, procesarlos (máx 2)
+    if (files && files.length > 0) {
+      if (files.length > 2) throw new BadRequestException('Maximum 2 files allowed');
+      const createdFiles = await Promise.all(
+        files.map(async (f) => {
+          const ext = (f.originalname.split('.').pop() || '').toLowerCase();
+          const type: FileTypeEnum = ['png', 'jpg', 'jpeg'].includes(ext)
+            ? FileTypeEnum.IMAGE
+            : FileTypeEnum.PDF;
+          const publicUrl = `/uploads/${f.filename}`;
+          const doc = new this.fileModel({ name: f.originalname, fileType: type, url: publicUrl });
+          return doc.save();
+        })
+      );
+      if (createdFiles.length) {
+        await this.claimModel.findByIdAndUpdate(claim._id, { $push: { files: { $each: createdFiles.map((d) => d._id) } } });
+      }
+    }
 
     const history = new this.historyModel({
       action: 'Creación del reclamo',
@@ -59,6 +86,7 @@ export class ClaimsService {
     const claims = await this.claimModel
       .find(query)
       .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
+      .populate({ path: 'files', select: 'name fileType url' })
       .lean()
       .exec();
 
@@ -78,7 +106,7 @@ export class ClaimsService {
         const latestPriority: ClaimPriorityEnum | undefined = lastHistory?.priority;
         const latestCriticality: ClaimCriticalityEnum | undefined = lastHistory?.criticality;
         // removemos `history` del claim base, el subarea se arma desde el último historial
-        const { history, ...rest } = claim as Record<string, unknown>;
+        const { history, files, ...rest } = claim as any;
 
         // Transform snapshot to desired shape: subarea with nested area
         let subareaSnapshot: any = undefined;
@@ -93,12 +121,18 @@ export class ClaimsService {
           };
         }
 
+        // Mapear URLs absolutas para archivos
+        const filesWithAbsolute = Array.isArray(files)
+          ? files.map((f: any) => ({ _id: f._id, name: f.name, fileType: f.fileType, url: this.buildAbsoluteUrl(f.url) }))
+          : [];
+
         return {
           ...rest,
           claimStatus: latestStatus,
           claimType: latestType,
           priority: latestPriority,
           criticality: latestCriticality,
+          ...(filesWithAbsolute.length ? { files: filesWithAbsolute } : {}),
           ...(subareaSnapshot ? { subarea: subareaSnapshot } : {}),
         };
       }),
@@ -120,6 +154,7 @@ export class ClaimsService {
           { path: 'subarea', select: 'name area', populate: { path: 'area', select: 'name' } },
         ],
       })
+      .populate({ path: 'files', select: 'name fileType url' })
       .lean()
       .exec();
 
@@ -138,6 +173,11 @@ export class ClaimsService {
           ...(sub ? { subarea: sub } : {}),
         };
       });
+    }
+
+    // Mapear archivos a URLs absolutas si existen
+    if (claim && Array.isArray((claim as any).files)) {
+      (claim as any).files = (claim as any).files.map((f: any) => ({ _id: f._id, name: f.name, fileType: f.fileType, url: this.buildAbsoluteUrl(f.url) }));
     }
 
     return claim;
@@ -279,5 +319,36 @@ export class ClaimsService {
       .populate({ path: 'user', select: 'firstName lastName' })
       .lean()
       .exec();
+  }
+
+  async attachFilesToClaim(claimId: string, files?: any[]) {
+    if (!Types.ObjectId.isValid(claimId)) throw new NotFoundException('Claim not found');
+    const claim = await this.claimModel.findById(claimId).exec();
+    if (!claim) throw new NotFoundException('Claim not found');
+
+    const maxFiles = 2;
+    const incoming = files || [];
+    if (incoming.length === 0) throw new BadRequestException('No files uploaded');
+    if (incoming.length > maxFiles) throw new BadRequestException('Maximum 2 files allowed');
+
+    const toCreate = await Promise.all(
+      incoming.map(async (f) => {
+        const ext = (f.originalname.split('.').pop() || '').toLowerCase();
+        const type: FileTypeEnum = ['png', 'jpg', 'jpeg'].includes(ext)
+          ? FileTypeEnum.IMAGE
+          : FileTypeEnum.PDF;
+        const publicUrl = `/uploads/${f.filename}`;
+        const created = new this.fileModel({ name: f.originalname, fileType: type, url: publicUrl });
+        return created.save();
+      }),
+    );
+
+    const ids = toCreate.map((doc) => doc._id);
+    await this.claimModel.findByIdAndUpdate(claimId, { $push: { files: { $each: ids } } }).exec();
+
+    return {
+      claimId,
+      files: toCreate.map((doc) => ({ _id: doc._id, name: doc.name, fileType: doc.fileType, url: doc.url })),
+    };
   }
 }

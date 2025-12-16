@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNotEmpty, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   ClaimPriority,
@@ -35,12 +35,5 @@ export class CreateClaimDto {
   @IsEnum(ClaimType)
   claimType: ClaimType;
 
-  @ApiProperty({
-    example: '64d4e5...',
-    required: false,
-    description: 'File ObjectId as string',
-  })
-  @IsOptional()
-  @IsString()
-  file?: string;
+  // Los archivos se envían vía multipart/form-data en el endpoint y no forman parte del DTO JSON.
 }
