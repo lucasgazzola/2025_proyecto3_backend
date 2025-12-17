@@ -1,29 +1,35 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Claim, ClaimCriticalityEnum, ClaimDocument, ClaimPriorityEnum, ClaimTypeEnum } from '../mongoose/schemas/claim.schema';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
-import { ClaimStateHistory, ClaimStateHistoryDocument, ClaimStatusEnum } from '../mongoose/schemas/claim-state-history.schema';
-import { RoleEnum, UserDocument, User } from '../mongoose/schemas/user.schema';
+import { ClaimStateHistory, ClaimStateHistoryDocument } from '../mongoose/schemas/claim-state-history.schema';
+import { RoleEnum } from '../mongoose/schemas/user.schema';
 import { Project, ProjectDocument } from '../mongoose/schemas/project.schema';
-import { Area, AreaDocument } from '../mongoose/schemas/area.schema';
 import { SubArea, SubAreaDocument } from '../mongoose/schemas/subarea.schema';
 import { ClaimMessage, ClaimMessageDocument } from '../mongoose/schemas/claim-message.schema';
 import { File as FileEntity, FileDocument, FileTypeEnum } from '../mongoose/schemas/file.schema';
 import { Payload } from 'src/common/interfaces/payload';
+import { CLAIM_REPOSITORY } from './repositories/claim.repository.interface';
+import type { IClaimRepository } from './repositories/claim.repository.interface';
+import { ClaimMapper } from './mapper/claim.mongo.mapper';
+import { ClaimStatus } from 'src/common/enums/claims.enums';
 
 @Injectable()
 export class ClaimsService {
   constructor(
-    @InjectModel(Claim.name) private claimModel: Model<ClaimDocument>,
-    @InjectModel(ClaimStateHistory.name) private historyModel: Model<ClaimStateHistoryDocument>,
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
-    @InjectModel(Area.name) private areaModel: Model<AreaDocument>,
-    @InjectModel(SubArea.name) private subAreaModel: Model<SubAreaDocument>,
-    @InjectModel(ClaimMessage.name) private messageModel: Model<ClaimMessageDocument>,
-    @InjectModel(FileEntity.name) private fileModel: Model<FileDocument>,
+    @Inject(CLAIM_REPOSITORY)
+    private readonly claimRepository: IClaimRepository,
+    @InjectModel(ClaimStateHistory.name)
+    private readonly historyModel: Model<ClaimStateHistoryDocument>,
+    @InjectModel(Project.name)
+    private readonly projectModel: Model<ProjectDocument>,
+    @InjectModel(SubArea.name)
+    private readonly subAreaModel: Model<SubAreaDocument>,
+    @InjectModel(ClaimMessage.name)
+    private readonly messageModel: Model<ClaimMessageDocument>,
+    @InjectModel(FileEntity.name)
+    private readonly fileModel: Model<FileDocument>,
   ) {}
 
   private buildAbsoluteUrl(relativeUrl: string): string {
@@ -33,188 +39,188 @@ export class ClaimsService {
     return `${base}${rel}`;
   }
 
-  async create(createClaimDto: CreateClaimDto, userId: string, files: any[] = []) {
-    const created = new this.claimModel({
-      description: createClaimDto.description,
-      project: new Types.ObjectId(createClaimDto.project),
-      user: new Types.ObjectId(userId),
-    });
-    const claim = await created.save();
+async create(
+  createClaimDto: CreateClaimDto,
+  userId: string,
+  files: Express.Multer.File[] = [],
+) {
+  // 1. Armar el objeto base del reclamo con el mapper
+  const claimData = ClaimMapper.toCreatePersistence(createClaimDto, userId);
+  const claim = await this.claimRepository.create(claimData);
 
-    // Si se cargaron archivos en la creación, procesarlos (máx 2)
-    if (files && files.length > 0) {
-      if (files.length > 2) throw new BadRequestException('Maximum 2 files allowed');
-      const createdFiles = await Promise.all(
-        files.map(async (f) => {
-          const ext = (f.originalname.split('.').pop() || '').toLowerCase();
-          const type: FileTypeEnum = ['png', 'jpg', 'jpeg'].includes(ext)
-            ? FileTypeEnum.IMAGE
-            : FileTypeEnum.PDF;
-          const publicUrl = `/uploads/${f.filename}`;
-          const doc = new this.fileModel({ name: f.originalname, fileType: type, url: publicUrl });
-          return doc.save();
-        })
-      );
-      if (createdFiles.length) {
-        await this.claimModel.findByIdAndUpdate(claim._id, { $push: { files: { $each: createdFiles.map((d) => d._id) } } });
-      }
+  // 2. Manejo de archivos
+  if (files.length) {
+    if (files.length > 2) {
+      throw new BadRequestException('Maximum 2 files allowed');
     }
 
-    const history = new this.historyModel({
-      action: 'Creación del reclamo',
-      startTime: new Date(),
-      startDate: new Date(),
-      claim: claim._id,
-      claimStatus: ClaimStatusEnum.PENDING,
-      claimType: createClaimDto.claimType,
-      priority: createClaimDto.priority,
-      criticality: createClaimDto.criticality,
-      user: claim.user,
-    });
-    await history.save();
-    await this.claimModel.findByIdAndUpdate(claim._id, { $push: { history: history._id } });
-    await this.projectModel.findByIdAndUpdate(claim.project, { $push: { claims: claim._id } });
-    return claim;
-  }
+    const createdFiles = await Promise.all(
+      files.map(async (f) => {
+        const ext = (f.originalname.split('.').pop() || '').toLowerCase();
+        const type: FileTypeEnum = ['png', 'jpg', 'jpeg'].includes(ext)
+          ? FileTypeEnum.IMAGE
+          : FileTypeEnum.PDF;
 
-  async findAllForUser(user: any) {
-    const query: any = {};
-    if (user?.role === RoleEnum.CUSTOMER) {
-      query.user = new Types.ObjectId(user.id || user._id);
-    }
-
-    const claims = await this.claimModel
-      .find(query)
-      .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
-      .populate({ path: 'files', select: 'name fileType url' })
-      .lean()
-      .exec();
-
-    // Para cada claim buscamos el último historial directamente en la colección de historiales
-    const claimsWithStatus = await Promise.all(
-      (claims || []).map(async (claim: any) => {
-        const lastHistory = await this.historyModel
-          .findOne({ claim: new Types.ObjectId(claim._id) })
-          .sort({ createdAt: -1 })
-          .select('priority criticality claimType claimStatus startDate subarea')
-          .populate({ path: 'subarea', select: 'name area', populate: { path: 'area', select: 'name' } })
-          .lean()
-          .exec();
-
-        const latestStatus: ClaimStatusEnum | undefined = lastHistory?.claimStatus;
-        const latestType: ClaimTypeEnum | undefined = lastHistory?.claimType;
-        const latestPriority: ClaimPriorityEnum | undefined = lastHistory?.priority;
-        const latestCriticality: ClaimCriticalityEnum | undefined = lastHistory?.criticality;
-        // removemos `history` del claim base, el subarea se arma desde el último historial
-        const { history, files, ...rest } = claim as any;
-
-        // Transform snapshot to desired shape: subarea with nested area
-        let subareaSnapshot: any = undefined;
-        if (lastHistory?.subarea) {
-          subareaSnapshot = {
-            _id: (lastHistory.subarea as any)._id,
-            name: (lastHistory.subarea as any).name,
-            area: {
-              _id: (lastHistory.subarea as any).area?._id,
-              name: (lastHistory.subarea as any).area?.name,
-            },
-          };
-        }
-
-        // Mapear URLs absolutas para archivos
-        const filesWithAbsolute = Array.isArray(files)
-          ? files.map((f: any) => ({ _id: f._id, name: f.name, fileType: f.fileType, url: this.buildAbsoluteUrl(f.url) }))
-          : [];
-
-        return {
-          ...rest,
-          claimStatus: latestStatus,
-          claimType: latestType,
-          priority: latestPriority,
-          criticality: latestCriticality,
-          ...(filesWithAbsolute.length ? { files: filesWithAbsolute } : {}),
-          ...(subareaSnapshot ? { subarea: subareaSnapshot } : {}),
-        };
+        const publicUrl = `/uploads/${f.filename}`;
+        const doc = new this.fileModel({
+          name: f.originalname,
+          fileType: type,
+          url: publicUrl,
+        });
+        return doc.save();
       }),
     );
 
-    return claimsWithStatus;
+    await this.claimRepository.pushFiles(
+      claim._id,
+      createdFiles.map((d) => d._id),
+    );
   }
 
-  async findOne(id: string) {
-    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Claim not found');
-    const claim = await this.claimModel
-      .findById(id)
-      .populate({ path: 'project', populate: { path: 'user', select: 'email firstName lastName role phone' } })
-      .populate({
-        path: 'history',
-        select: 'action startTime endTime startDate endDate claimStatus priority criticality user subarea',
-        populate: [
-          { path: 'user', select: 'email firstName lastName role phone' },
-          { path: 'subarea', select: 'name area', populate: { path: 'area', select: 'name' } },
-        ],
-      })
-      .populate({ path: 'files', select: 'name fileType url' })
-      .lean()
-      .exec();
+  // 3. Historial inicial
+  const historyData = ClaimMapper.toCreateHistoryPersistence({
+    action: 'Creación del reclamo',
+    claimId: String(claim._id),
+    userId,
+    claimStatus: createClaimDto.claimStatus,   // ✅ usa enums de common/enums
+    claimType: createClaimDto.claimType,
+    priority: createClaimDto.priority,
+    criticality: createClaimDto.criticality,
+    subarea: createClaimDto.subarea,
+  });
 
-    // Ajustar el shape de cada entrada del historial a { subarea: { _id, name, area: { _id, name } } }
-    if (claim?.history && Array.isArray(claim.history)) {
-      claim.history = (claim.history as any[]).map((h: any) => {
-        const sub = h?.subarea
-          ? {
-              _id: h.subarea._id,
-              name: h.subarea.name,
-              area: h.subarea.area ? { _id: h.subarea.area._id, name: h.subarea.area.name } : undefined,
-            }
-          : undefined;
-        return {
-          ...h,
-          ...(sub ? { subarea: sub } : {}),
+  const history = new this.historyModel(historyData);
+  await history.save();
+  await this.claimRepository.pushHistory(claim._id, history._id);
+
+  // 4. Asociar el reclamo al proyecto
+  await this.projectModel.findByIdAndUpdate(claim.project, {
+    $push: { claims: claim._id },
+  });
+
+  return claim;
+}
+
+async findAllForUser(user: Payload) {
+  const query: Record<string, unknown> = {};
+
+  // casteo explícito de role a RoleEnum
+  if (user?.role && user.role === RoleEnum.CUSTOMER) {
+    query.user = new Types.ObjectId(user.id || user._id);
+  }
+
+  const claims = await this.claimRepository.findAll(query);
+
+  const claimsWithStatus = await Promise.all(
+    (claims || []).map(async (claim) => {
+      const lastHistory = await this.historyModel
+        .findOne({ claim: new Types.ObjectId(claim._id) })
+        .sort({ createdAt: -1 })
+        .select('priority criticality claimType claimStatus startDate subarea')
+        .populate({
+          path: 'subarea',
+          select: 'name area',
+          populate: { path: 'area', select: 'name' },
+        })
+        .lean()
+        .exec();
+
+      const { history, files, ...rest } = claim as any;
+
+      let subareaSnapshot: any = undefined;
+      if (lastHistory?.subarea) {
+        subareaSnapshot = {
+          _id: (lastHistory.subarea as any)._id,
+          name: (lastHistory.subarea as any).name,
+          area: {
+            _id: (lastHistory.subarea as any).area?._id,
+            name: (lastHistory.subarea as any).area?.name,
+          },
         };
-      });
-    }
+      }
 
-    // Mapear archivos a URLs absolutas si existen
-    if (claim && Array.isArray((claim as any).files)) {
-      (claim as any).files = (claim as any).files.map((f: any) => ({ _id: f._id, name: f.name, fileType: f.fileType, url: this.buildAbsoluteUrl(f.url) }));
-    }
+      const filesWithAbsolute = Array.isArray(files)
+        ? files.map((f: any) => ({
+            _id: f._id,
+            name: f.name,
+            fileType: f.fileType,
+            url: this.buildAbsoluteUrl(f.url),
+          }))
+        : [];
 
-    return claim;
+      return {
+        ...rest,
+        claimStatus: lastHistory?.claimStatus,
+        claimType: lastHistory?.claimType,
+        priority: lastHistory?.priority,
+        criticality: lastHistory?.criticality,
+        ...(filesWithAbsolute.length ? { files: filesWithAbsolute } : {}),
+        ...(subareaSnapshot ? { subarea: subareaSnapshot } : {}),
+      };
+    }),
+  );
+
+  return claimsWithStatus;
+}
+
+
+
+async findOne(id: string) {
+  if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Claim not found');
+  const claim = await this.claimRepository.findById(id); // ✅ repositorio
+  if (!claim) throw new NotFoundException('Claim not found');
+
+  if (claim?.history && Array.isArray(claim.history)) {
+    claim.history = (claim.history as any[]).map((h: any) => {
+      const sub = h?.subarea
+        ? {
+            _id: h.subarea._id,
+            name: h.subarea.name,
+            area: h.subarea.area
+              ? { _id: h.subarea.area._id, name: h.subarea.area.name }
+              : undefined,
+          }
+        : undefined;
+      return { ...h, ...(sub ? { subarea: sub } : {}) };
+    });
   }
 
-  async updateWithHistory(id: string, updateClaimDto: UpdateClaimDto, currentUser?: { id?: string; _id?: string }) {
-    // Validar que `id` es un ObjectId válido antes de usarlo
+  if (claim && Array.isArray((claim as any).files)) {
+    (claim as any).files = (claim as any).files.map((f: any) => ({
+      _id: f._id,
+      name: f.name,
+      fileType: f.fileType,
+      url: this.buildAbsoluteUrl(f.url),
+    }));
+  }
+
+  return claim;
+}
+
+
+  async updateWithHistory(
+    id: string,
+    updateClaimDto: UpdateClaimDto,
+    currentUser?: { id?: string; _id?: string },
+  ) {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Claim not found');
 
-    // Si el último historial está RESOLVED, no permitir cambios
     const lastHistory = await this.historyModel
       .findOne({ claim: new Types.ObjectId(id) })
       .sort({ createdAt: -1 })
       .lean()
       .exec();
 
-    if (lastHistory?.claimStatus === ClaimStatusEnum.RESOLVED) {
+    if (lastHistory?.claimStatus === ClaimStatus.RESOLVED) {
       throw new ConflictException('This claim has been resolved and cannot be updated.');
     }
-    // Validate project id in DTO before casting to ObjectId
-    const projectUpdate: any = updateClaimDto.project && Types.ObjectId.isValid(updateClaimDto.project)
-      ? { project: new Types.ObjectId(updateClaimDto.project) }
-      : (updateClaimDto.project ? (() => { throw new BadRequestException('Invalid project id'); })() : {});
 
-    const updated = await this.claimModel.findByIdAndUpdate(
+    const updated = await this.claimRepository.updateBase(
       id,
-      {
-        // claimType/priority/criticality ya no viven en Claim; quedan en el historial
-        ...projectUpdate,
-        ...(updateClaimDto.subarea && Types.ObjectId.isValid(updateClaimDto.subarea) && { subarea: new Types.ObjectId(updateClaimDto.subarea) })
-      },
-      { new: true },
-    ).exec();
+      ClaimMapper.toUpdatePersistence(updateClaimDto), // ✅ mapper
+    );
     if (!updated) throw new NotFoundException('Claim not found');
 
-    // Registrar SIEMPRE una nueva entrada en el historial en cada actualización
-    // Guardar referencia a la subárea (que ya está asociada a un área vía relación)
     let subareaIdToStore: Types.ObjectId | undefined = undefined;
     if (updateClaimDto.subarea && Types.ObjectId.isValid(updateClaimDto.subarea)) {
       subareaIdToStore = new Types.ObjectId(updateClaimDto.subarea);
@@ -222,7 +228,6 @@ export class ClaimsService {
       subareaIdToStore = new Types.ObjectId(String((updated as any).subarea));
     }
 
-    // Cerrar el historial previo (si existe) estableciendo fecha de fin
     if (lastHistory?._id) {
       await this.historyModel.findByIdAndUpdate(lastHistory._id, {
         endTime: new Date(),
@@ -230,22 +235,21 @@ export class ClaimsService {
       });
     }
 
-    const history = new this.historyModel({
-      action: updateClaimDto.actions || 'Actualización de reclamo',
-      startTime: new Date(),
-      startDate: new Date(),
-      claim: new Types.ObjectId(id),
-      claimStatus: updateClaimDto.claimStatus,
-      priority: updateClaimDto.priority,
-      criticality: updateClaimDto.criticality,
-      claimType: updateClaimDto.claimType,
-      user: new Types.ObjectId(currentUser?.id ?? currentUser?._id ?? String(updated.user)),
-      ...(subareaIdToStore ? { subarea: subareaIdToStore } : {}),
-    });
+    const history = new this.historyModel(
+      ClaimMapper.toCreateHistoryPersistence({
+        action: updateClaimDto.actions || 'Actualización de reclamo',
+        claimId: id,
+        userId: currentUser?.id ?? String(currentUser?._id ?? updated.user),
+        claimStatus: updateClaimDto.claimStatus,
+        priority: updateClaimDto.priority,
+        criticality: updateClaimDto.criticality,
+        claimType: updateClaimDto.claimType,
+        subarea: updateClaimDto.subarea,
+      }),
+    );
     await history.save();
-    await this.claimModel.findByIdAndUpdate(id, { $push: { history: history._id } });
+    await this.claimRepository.pushHistory(new Types.ObjectId(id), history._id);
 
-    // Devolver el claim actualizado enriquecido con el último estado y el snapshot de subarea+area
     const fullClaim = await this.findOne(id);
     let subareaSnapshot: any = undefined;
     if (subareaIdToStore) {
@@ -258,7 +262,9 @@ export class ClaimsService {
         subareaSnapshot = {
           _id: sub._id,
           name: sub.name,
-          area: sub.area ? { _id: (sub.area as any)._id, name: (sub.area as any).name } : undefined,
+          area: sub.area
+            ? { _id: (sub.area as any)._id, name: (sub.area as any).name }
+            : undefined,
         };
       }
     }
@@ -271,7 +277,8 @@ export class ClaimsService {
   }
 
   async remove(id: string) {
-    return this.claimModel.findByIdAndDelete(id).exec();
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Claim not found');
+    await this.claimRepository.delete(id);
   }
 
   async getHistory(claimId: string) {
@@ -321,34 +328,42 @@ export class ClaimsService {
       .exec();
   }
 
-  async attachFilesToClaim(claimId: string, files?: any[]) {
+  async attachFilesToClaim(claimId: string, files: Express.Multer.File[] = []) {
     if (!Types.ObjectId.isValid(claimId)) throw new NotFoundException('Claim not found');
-    const claim = await this.claimModel.findById(claimId).exec();
+    const claim = await this.claimRepository.findById(claimId);
     if (!claim) throw new NotFoundException('Claim not found');
 
     const maxFiles = 2;
-    const incoming = files || [];
-    if (incoming.length === 0) throw new BadRequestException('No files uploaded');
-    if (incoming.length > maxFiles) throw new BadRequestException('Maximum 2 files allowed');
+    if (files.length === 0) throw new BadRequestException('No files uploaded');
+    if (files.length > maxFiles) throw new BadRequestException('Maximum 2 files allowed');
 
     const toCreate = await Promise.all(
-      incoming.map(async (f) => {
+      files.map(async (f) => {
         const ext = (f.originalname.split('.').pop() || '').toLowerCase();
         const type: FileTypeEnum = ['png', 'jpg', 'jpeg'].includes(ext)
           ? FileTypeEnum.IMAGE
           : FileTypeEnum.PDF;
         const publicUrl = `/uploads/${f.filename}`;
-        const created = new this.fileModel({ name: f.originalname, fileType: type, url: publicUrl });
+        const created = new this.fileModel({
+          name: f.originalname,
+          fileType: type,
+          url: publicUrl,
+        });
         return created.save();
       }),
     );
 
     const ids = toCreate.map((doc) => doc._id);
-    await this.claimModel.findByIdAndUpdate(claimId, { $push: { files: { $each: ids } } }).exec();
+    await this.claimRepository.pushFiles(new Types.ObjectId(claimId), ids);
 
     return {
       claimId,
-      files: toCreate.map((doc) => ({ _id: doc._id, name: doc.name, fileType: doc.fileType, url: doc.url })),
+      files: toCreate.map((doc) => ({
+        _id: doc._id,
+        name: doc.name,
+        fileType: doc.fileType,
+        url: this.buildAbsoluteUrl(doc.url),
+      })),
     };
   }
 }

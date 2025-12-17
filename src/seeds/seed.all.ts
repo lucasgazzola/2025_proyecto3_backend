@@ -7,8 +7,8 @@ import { UserSchema, User, RoleEnum } from '../mongoose/schemas/user.schema';
 import { ProjectSchema, Project, ProjectTypeEnum } from '../mongoose/schemas/project.schema';
 // Files: omit seeding to avoid creating file records without URLs
 import { ClaimSchema, Claim, ClaimCriticalityEnum, ClaimPriorityEnum, ClaimTypeEnum } from '../mongoose/schemas/claim.schema';
-import { ClaimStateHistorySchema, ClaimStateHistory, ClaimStatusEnum } from '../mongoose/schemas/claim-state-history.schema';
-
+import { ClaimStateHistorySchema, ClaimStateHistory } from '../mongoose/schemas/claim-state-history.schema';
+import { ClaimStatus } from '../common/enums/claims.enums';
 function rand<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 function sample<T>(arr: T[], n: number): T[] { return [...arr].sort(() => Math.random() - 0.5).slice(0, n); }
 
@@ -225,7 +225,7 @@ async function run() {
         startTime: firstStart,
         startDate: firstStart,
         claim: claim._id,
-        claimStatus: ClaimStatusEnum.PENDING,
+        claimStatus: ClaimStatus.PENDING,
         priority: chosenPriority,
         criticality: chosenCriticality,
         claimType: chosenClaimType,
@@ -257,7 +257,7 @@ async function run() {
         startTime: firstStart,
         startDate: firstStart,
         claim: claim._id,
-        claimStatus: ClaimStatusEnum.PENDING,
+        claimStatus: ClaimStatus.PENDING,
         priority: chosenPriority,
         criticality: chosenCriticality,
         claimType: chosenClaimType,
@@ -268,9 +268,9 @@ async function run() {
 
   // Additional Claim state histories with chaining logic
   const statuses = [
-    ClaimStatusEnum.PENDING,
-    ClaimStatusEnum.IN_PROGRESS,
-    ClaimStatusEnum.RESOLVED,
+    ClaimStatus.PENDING,
+    ClaimStatus.IN_PROGRESS,
+    ClaimStatus.RESOLVED,
   ];
 
   for (const claimId of claimsCreated) {
@@ -283,7 +283,7 @@ async function run() {
       if (!lastHistory) break;
 
       // If last is RESOLVED, stop and do not update its endDate
-      if (lastHistory.claimStatus === ClaimStatusEnum.RESOLVED) break;
+      if (lastHistory.claimStatus === ClaimStatus.RESOLVED) break;
 
       // Start after last startDate
       const lastStartMs = new Date(lastHistory.startDate).getTime();
@@ -304,8 +304,8 @@ async function run() {
 
       // Choose next status (prefer progress, possibly resolved at the end)
       const nextStatus = e === extraEvents - 1 && Math.random() < 0.6
-        ? ClaimStatusEnum.RESOLVED
-        : ClaimStatusEnum.IN_PROGRESS;
+        ? ClaimStatus.RESOLVED
+        : ClaimStatus.IN_PROGRESS;
 
       // Subsequent histories must include area + subarea
       const areaPick = rand(areas);
@@ -313,7 +313,7 @@ async function run() {
       const subPick = subsForArea.length ? rand(subsForArea) : undefined;
 
       await ClaimStateHistoryModel.create({
-        action: nextStatus === ClaimStatusEnum.RESOLVED ? 'Resuelto' : `Actualización ${e + 1}`,
+        action: nextStatus === ClaimStatus.RESOLVED ? 'Resuelto' : `Actualización ${e + 1}`,
         startTime: startDate,
         startDate: startDate,
         subarea: subPick?._id,

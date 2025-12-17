@@ -1,14 +1,13 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { ClaimPriorityEnum, ClaimCriticalityEnum, ClaimTypeEnum } from './claim.schema';
+import {
+  ClaimPriority,
+  ClaimCriticality,
+  ClaimType,
+  ClaimStatus,
+} from '../../common/enums/claims.enums';
 
 export type ClaimStateHistoryDocument = ClaimStateHistory & Document;
-
-export enum ClaimStatusEnum {
-  PENDING = 'PENDING',
-  IN_PROGRESS = 'IN_PROGRESS',
-  RESOLVED = 'RESOLVED',
-}
 
 @Schema({ timestamps: true })
 export class ClaimStateHistory {
@@ -30,17 +29,17 @@ export class ClaimStateHistory {
   @Prop({ type: Types.ObjectId, ref: 'Claim', required: true })
   claim: Types.ObjectId;
 
-  @Prop({ type: String, enum: Object.values(ClaimStatusEnum), required: true })
-  claimStatus: ClaimStatusEnum;
+  @Prop({ type: String, enum: Object.values(ClaimStatus), required: true })
+  claimStatus: ClaimStatus;
 
-  @Prop({ type: String, enum: Object.values(ClaimTypeEnum), required: true })
-  claimType: ClaimTypeEnum;
+  @Prop({ type: String, enum: Object.values(ClaimType), required: true })
+  claimType: ClaimType;
 
-  @Prop({ type: String, enum: Object.values(ClaimPriorityEnum), required: true })
-  priority: ClaimPriorityEnum;
+  @Prop({ type: String, enum: Object.values(ClaimPriority), required: true })
+  priority: ClaimPriority;
 
-  @Prop({ type: String, enum: Object.values(ClaimCriticalityEnum), required: true })
-  criticality: ClaimCriticalityEnum;
+  @Prop({ type: String, enum: Object.values(ClaimCriticality), required: true })
+  criticality: ClaimCriticality;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   user: Types.ObjectId;

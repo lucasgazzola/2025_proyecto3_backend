@@ -5,6 +5,8 @@ import { Project, ProjectDocument } from '../mongoose/schemas/project.schema';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { RoleEnum } from '../mongoose/schemas/user.schema';
+import { ProjectResponseDto } from './dto/project-response.dto';
+import { projectMapper } from './mapper/project.mapper'; 
 
 @Injectable()
 export class ProjectsService {
@@ -22,83 +24,42 @@ export class ProjectsService {
     return created.save();
   }
 
-  async findAllForUser(user: any): Promise<any[]> {
-    const baseQuery: any = { deletedAt: { $exists: false } };
+async findAllForUser(user: any): Promise<ProjectResponseDto[]> {
+  const baseQuery: any = { deletedAt: { $exists: false } };
 
-    if (user?.role === RoleEnum.CUSTOMER) {
-      baseQuery.user = new Types.ObjectId(user.id || user._id);
-    }
-
-    const projects = await this.projectModel
-      .find(baseQuery)
-      .populate({ path: 'user', select: 'email firstName lastName role phone' })
-      .populate({
-        path: 'claims',
-        select: 'description claimType priority criticality subarea createdAt updatedAt',
-        populate: [
-          { path: 'subarea', select: 'name area', populate: { path: 'area', select: 'name' } },
-          { path: 'user', select: 'email firstName lastName role phone' },
-        ],
-      })
-      .lean()
-      .exec();
-
-    return projects.map((doc: any) => {
-      const { _id, user, claims, ...rest } = doc;
-      const mappedUser = user
-        ? {
-            id: user._id?.toString?.() ?? user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            role: user.role,
-            phone: user.phone,
-          }
-        : undefined;
-      const mappedClaims = Array.isArray(claims)
-        ? claims.map((c: any) => ({
-            _id: c._id.toString(),
-            description: c.description,
-            claimType: c.claimType,
-            priority: c.priority,
-            criticality: c.criticality,
-            area: c?.subarea?.area?.name ?? undefined,
-            subarea: c?.subarea
-              ? { _id: c.subarea._id?.toString?.(), name: c.subarea.name }
-              : undefined,
-            user: c.user
-              ? {
-                  _id: c.user._id.toString(),
-                  email: c.user.email,
-                  firstName: c.user.firstName,
-                  lastName: c.user.lastName,
-                  role: c.user.role,
-                  phone: c.user.phone,
-                }
-              : undefined,
-            createdAt: c.createdAt,
-            updatedAt: c.updatedAt,
-          }))
-        : undefined;
-      return {
-        _id: _id.toString(),
-        ...rest,
-        ...(mappedUser && { user: mappedUser }),
-        ...(mappedClaims && { claims: mappedClaims }),
-      };
-    });
+  if (user?.role === RoleEnum.CUSTOMER) {
+    baseQuery.user = new Types.ObjectId(user.id || user._id);
   }
 
+  const projects = await this.projectModel
+    .find(baseQuery)
+    .populate({ path: 'user', select: 'email firstName lastName role phone' })
+    .populate({
+      path: 'claims',
+      select: 'description claimType priority criticality subarea createdAt updatedAt',
+      populate: [
+        { path: 'subarea', select: 'name area', populate: { path: 'area', select: 'name' } },
+        { path: 'user', select: 'email firstName lastName role phone' },
+      ],
+    })
+    .lean()
+    .exec();
 
-  async findAll() {
-    return this.projectModel.find({ deletedAt: { $exists: false } }).exec();
-  }
+  return projects.map(projectMapper);
+}
 
-  async findOne(id: string) {
-    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Project not found');
-    return this.projectModel.findById(id).exec();
-  }
 
+async findAll(): Promise<ProjectResponseDto[]> {
+  const projects = await this.projectModel.find({ deletedAt: { $exists: false } }).lean().exec();
+  return projects.map(projectMapper);
+}
+
+async findOne(id: string): Promise<ProjectResponseDto> {
+  if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Project not found');
+  const project = await this.projectModel.findById(id).lean().exec();
+  if (!project) throw new NotFoundException('Project not found');
+  return projectMapper(project);
+}
   async update(id: string, updateProjectDto: UpdateProjectDto) {
     return this.projectModel.findByIdAndUpdate(id, updateProjectDto as any, { new: true }).exec();
   }
