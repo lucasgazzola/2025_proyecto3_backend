@@ -5,7 +5,7 @@ import { AreaSchema, Area } from '../mongoose/schemas/area.schema';
 import { SubAreaSchema, SubArea } from '../mongoose/schemas/subarea.schema';
 import { UserSchema, User, RoleEnum } from '../mongoose/schemas/user.schema';
 import { ProjectSchema, Project, ProjectTypeEnum } from '../mongoose/schemas/project.schema';
-import { FileSchema, File, FileTypeEnum } from '../mongoose/schemas/file.schema';
+// Files: omit seeding to avoid creating file records without URLs
 import { ClaimSchema, Claim, ClaimCriticalityEnum, ClaimPriorityEnum, ClaimTypeEnum } from '../mongoose/schemas/claim.schema';
 import { ClaimStateHistorySchema, ClaimStateHistory, ClaimStatusEnum } from '../mongoose/schemas/claim-state-history.schema';
 
@@ -21,7 +21,7 @@ async function run() {
   const SubAreaModel = mongoose.model(SubArea.name, SubAreaSchema);
   const UserModel = mongoose.model(User.name, UserSchema);
   const ProjectModel = mongoose.model(Project.name, ProjectSchema);
-  const FileModel = mongoose.model(File.name, FileSchema);
+  // const FileModel = mongoose.model(File.name, FileSchema);
   const ClaimModel = mongoose.model(Claim.name, ClaimSchema);
   const ClaimStateHistoryModel = mongoose.model(ClaimStateHistory.name, ClaimStateHistorySchema);
 
@@ -29,7 +29,7 @@ async function run() {
   await Promise.all([
     ClaimStateHistoryModel.deleteMany({}),
     ClaimModel.deleteMany({}),
-    FileModel.deleteMany({}),
+    // FileModel.deleteMany({}),
     ProjectModel.deleteMany({}),
     UserModel.deleteMany({}),
     SubAreaModel.deleteMany({}),
@@ -185,16 +185,7 @@ async function run() {
     }
   }
 
-  // Files
-  const fileTypes = Object.values(FileTypeEnum);
-  const filesCreated: Types.ObjectId[] = [];
-  for (let i = 0; i < 40; i++) {
-    const file = await FileModel.create({
-      name: `archivo_${i + 1}.${rand(fileTypes).toLowerCase()}`,
-      fileType: rand(fileTypes),
-    });
-    filesCreated.push(file._id);
-  }
+  // Skip file seeding to ensure no claim has images/files by default
 
   // Claims
   const priorities = Object.values(ClaimPriorityEnum);
