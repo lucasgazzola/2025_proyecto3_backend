@@ -295,20 +295,70 @@ export class DashboardService {
       ])
       .exec();
 
-    // 4) Carga por área (estado actual)
-    const workloadByArea = await this.historyModel
+    // 4) Carga por área (estado actual, 1 por claim, no por subárea)
+    // Para cada claim, tomar su ÚLTIMO historial y agrupar por área de su subárea actual
+    const workloadByArea = await this.claimModel
       .aggregate([
-        { $match: { ...historyMatch } },
+        { $match: claimMatch },
+        ...claimLookupProject,
+        // Si responsibleUserId está presente, limitar a claims donde el usuario haya participado alguna vez
+        ...(filters.responsibleUserId
+          ? [
+              {
+                $lookup: {
+                  from: 'claimstatehistories',
+                  let: { claimId: '$_id' },
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: {
+                          $and: [
+                            { $eq: ['$claim', '$$claimId'] },
+                            { $eq: ['$user', new Types.ObjectId(filters.responsibleUserId)] },
+                          ],
+                        },
+                      },
+                    },
+                  ],
+                  as: 'involvement',
+                },
+              },
+              { $match: { involvement: { $not: { $size: 0 } } } },
+            ]
+          : []),
+        // Traer todos los historiales del reclamo y quedarnos con el último
         {
-          $group: {
-            _id: '$subarea',
-            count: { $sum: 1 },
+          $lookup: {
+            from: 'claimstatehistories',
+            localField: '_id',
+            foreignField: 'claim',
+            as: 'histories',
           },
         },
+        { $unwind: '$histories' },
+        { $sort: { 'histories.createdAt': -1 } },
+        {
+          $group: {
+            _id: '$_id',
+            latest: { $first: '$histories' },
+          },
+        },
+        // Filtrar por rango de fechas sobre el último startDate si corresponde
+        ...(filters.fromDate || filters.toDate
+          ? [{ $match: this.buildDateMatch(filters, 'latest.startDate') }]
+          : []),
+        // Si se pide subárea/responsable actual, filtrar sobre el último historial
+        ...(filters.subareaId
+          ? [{ $match: { 'latest.subarea': new Types.ObjectId(filters.subareaId) } }]
+          : []),
+        ...(filters.responsibleUserId
+          ? [{ $match: { 'latest.user': new Types.ObjectId(filters.responsibleUserId) } }]
+          : []),
+        // Join a subárea y área actuales
         {
           $lookup: {
             from: 'subareas',
-            localField: '_id',
+            localField: 'latest.subarea',
             foreignField: '_id',
             as: 'subareaDoc',
           },
@@ -323,7 +373,9 @@ export class DashboardService {
           },
         },
         { $unwind: '$areaDoc' },
-        { $project: { _id: 0, areaId: '$areaDoc._id', areaName: '$areaDoc.name', subareaId: '$subareaDoc._id', subareaName: '$subareaDoc.name', count: 1 } },
+        { $group: { _id: '$areaDoc._id', areaName: { $first: '$areaDoc.name' }, count: { $sum: 1 } } },
+        { $project: { _id: 0, areaId: '$_id', areaName: 1, count: 1 } },
+        { $sort: { areaName: 1 } },
       ])
       .exec();
 
