@@ -1,4 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/mongoose';
+import { Connection } from 'mongoose';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { USER_REPOSITORY} from './repositories/user.repository.interface';
@@ -11,14 +13,26 @@ export class UsersService {
   constructor(
     @Inject(USER_REPOSITORY)
     private readonly repository: IUserRepository,
+    @InjectConnection() private readonly connection: Connection
   ) {}
 
   async create(createUserDto: CreateUserDto) {
     if (!createUserDto.role) {
-      // Si no envían rol, es CUSTOMER
+
       createUserDto.role = Role.CUSTOMER;
     }
-    return this.repository.create(createUserDto);
+
+    const session = await this.connection.startSession();
+
+    try {
+      const result = await session.withTransaction(async () => {
+        return this.repository.create(createUserDto, session);
+
+      });
+
+      return result;
+
+    } catch (error) { throw error; } finally { await session.endSession();  }   
   }
 
   async findAll() {

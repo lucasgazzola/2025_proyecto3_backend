@@ -31,6 +31,8 @@ import { MongooseSchemasModule } from './mongoose/mongoose-schemas.module';
         uri:
           configService.get<string>('MONGO_URI') ||
           'mongodb://localhost/proyecto3',
+          retryWrites: true,
+          w: 'majority',
         // optional: pass driver options
         // useNewUrlParser: true,
         // useUnifiedTopology: true,

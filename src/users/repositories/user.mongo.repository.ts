@@ -1,7 +1,7 @@
 import { User } from "../user.entity";
 import { UserMapper, UserDomain } from "../mappers/user.mongo.mapper";
 import { InjectModel } from "@nestjs/mongoose";
-import { Model } from "mongoose";
+import { ClientSession, Model } from "mongoose";
 import { UserDocument } from "src/mongoose/schemas/user.schema";
 import { CreateUserDto } from "../dto/create-user.dto";
 import { Types } from "mongoose";
@@ -12,13 +12,23 @@ export class UserRepository implements UserRepository{
         @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     ){}
 
-    async create(data: CreateUserDto): Promise<UserDomain> {
-        const created = new this.userModel(data);
-        const saved = await created.save();
-        const domain = UserMapper.toDomain(saved);
-        // Al crear, no esperamos null; si ocurre, lanzamos error lógico
-        if (!domain) throw new Error('Failed to map created user');
-        return domain;
+    async create(data: CreateUserDto, session?: ClientSession): Promise<UserDomain> {
+
+        if (session) {
+            const [saved] = await this.userModel.create([data], { session });
+            const domain = UserMapper.toDomain(saved);
+            if (!domain) throw new Error('Failed to map created user');
+            return domain;
+        } else {
+            const created = new this.userModel(data);
+            const saved = await created.save();
+            const domain = UserMapper.toDomain(saved);
+            // Al crear, no esperamos null; si ocurre, lanzamos error lógico
+            if (!domain) throw new Error('Failed to map created user');
+            return domain;
+        }
+
+        
     }
 
     async findAll(): Promise<UserDomain[]> {
