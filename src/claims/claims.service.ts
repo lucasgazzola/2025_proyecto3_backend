@@ -1,6 +1,7 @@
 import { Injectable, Inject, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, Types, Connection } from 'mongoose';
+import { InjectConnection } from '@nestjs/mongoose';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { UpdateClaimDto } from './dto/update-claim.dto';
 import { ClaimStateHistory, ClaimStateHistoryDocument } from '../mongoose/schemas/claim-state-history.schema';
@@ -14,6 +15,7 @@ import { CLAIM_REPOSITORY } from './repositories/claim.repository.interface';
 import type { IClaimRepository } from './repositories/claim.repository.interface';
 import { ClaimMapper } from './mapper/claim.mongo.mapper';
 import { ClaimStatus } from 'src/common/enums/claims.enums';
+
 
 @Injectable()
 export class ClaimsService {
@@ -30,6 +32,7 @@ export class ClaimsService {
     private readonly messageModel: Model<ClaimMessageDocument>,
     @InjectModel(FileEntity.name)
     private readonly fileModel: Model<FileDocument>,
+    @InjectConnection() private readonly connection: Connection
   ) {}
 
   private buildAbsoluteUrl(relativeUrl: string): string {
@@ -44,62 +47,95 @@ async create(
   userId: string,
   files: Express.Multer.File[] = [],
 ) {
-  // 1. Armar el objeto base del reclamo con el mapper
-  const claimData = ClaimMapper.toCreatePersistence(createClaimDto, userId);
-  const claim = await this.claimRepository.create(claimData);
+  const session = await this.connection.startSession();
 
-  // 2. Manejo de archivos
-  if (files.length) {
-    if (files.length > 2) {
-      throw new BadRequestException('Maximum 2 files allowed');
-    }
+  try {
+    const result = await session.withTransaction(async () => {
+      const claimData = ClaimMapper.toCreatePersistence(createClaimDto, userId);
+      const claim = await this.claimRepository.create(claimData, session);
 
-    const createdFiles = await Promise.all(
-      files.map(async (f) => {
-        const ext = (f.originalname.split('.').pop() || '').toLowerCase();
-        const type: FileTypeEnum = ['png', 'jpg', 'jpeg'].includes(ext)
-          ? FileTypeEnum.IMAGE
-          : FileTypeEnum.PDF;
+      if (!claim) {
+        throw new BadRequestException('No se pudo crear el claim');
+      }
 
-        const publicUrl = `/uploads/${f.filename}`;
-        const doc = new this.fileModel({
-          name: f.originalname,
-          fileType: type,
-          url: publicUrl,
-        });
-        return doc.save();
-      }),
-    );
+      if (!claim.project || !Types.ObjectId.isValid(String(claim.project))) {
+        throw new BadRequestException('Claim.project inválido');
+      }
 
-    await this.claimRepository.pushFiles(
-      claim._id,
-      createdFiles.map((d) => d._id),
-    );
+      // ✅ VALIDACIÓN AGREGADA (único cambio)
+      const projectExists = await this.projectModel
+        .findById(claim.project)
+        .session(session);
+
+      if (!projectExists) {
+        throw new BadRequestException('Project no existe');
+      }
+      // ✅ FIN CAMBIO
+
+      if (files.length) {
+        if (files.length > 2) {
+          throw new BadRequestException('Maximum 2 files allowed');
+        }
+
+        const createdFiles = await Promise.all(
+          files.map(async (f) => {
+            const ext = (f.originalname.split('.').pop() || '').toLowerCase();
+            const type: FileTypeEnum = ['png', 'jpg', 'jpeg'].includes(ext)
+              ? FileTypeEnum.IMAGE
+              : FileTypeEnum.PDF;
+
+            const doc = new this.fileModel({
+              name: f.originalname,
+              fileType: type,
+              url: `/uploads/${f.filename}`,
+            });
+
+            return doc.save({ session });
+          }),
+        );
+
+        await this.claimRepository.pushFiles(
+          claim._id,
+          createdFiles.map((d) => d._id),
+          session,
+        );
+      }
+
+      const historyData = ClaimMapper.toCreateHistoryPersistence({
+        action: 'Creación del reclamo',
+        claimId: String(claim._id),
+        userId,
+        claimStatus: createClaimDto.claimStatus ?? ClaimStatus.PENDING,
+        claimType: createClaimDto.claimType,
+        priority: createClaimDto.priority,
+        criticality: createClaimDto.criticality,
+        subarea: createClaimDto.subarea,
+      });
+
+      const history = new this.historyModel(historyData);
+      await history.save({ session });
+
+      await this.claimRepository.pushHistory(
+        claim._id,
+        history._id,
+        session,
+      );
+
+      await this.projectModel.findByIdAndUpdate(
+        claim.project,
+        { $push: { claims: claim._id } },
+        { session },
+      );
+
+      return claim;
+    });
+
+    return result;
+  } finally {
+    await session.endSession();
   }
-
-  // 3. Historial inicial
-  const historyData = ClaimMapper.toCreateHistoryPersistence({
-    action: 'Creación del reclamo',
-    claimId: String(claim._id),
-    userId,
-    claimStatus: createClaimDto.claimStatus,   // ✅ usa enums de common/enums
-    claimType: createClaimDto.claimType,
-    priority: createClaimDto.priority,
-    criticality: createClaimDto.criticality,
-    subarea: createClaimDto.subarea,
-  });
-
-  const history = new this.historyModel(historyData);
-  await history.save();
-  await this.claimRepository.pushHistory(claim._id, history._id);
-
-  // 4. Asociar el reclamo al proyecto
-  await this.projectModel.findByIdAndUpdate(claim.project, {
-    $push: { claims: claim._id },
-  });
-
-  return claim;
 }
+
 
 async findAllForUser(user: Payload) {
   const query: Record<string, unknown> = {};
@@ -217,7 +253,7 @@ async findOne(id: string) {
 
     const updated = await this.claimRepository.updateBase(
       id,
-      ClaimMapper.toUpdatePersistence(updateClaimDto), // ✅ mapper
+      ClaimMapper.toUpdatePersistence(updateClaimDto), 
     );
     if (!updated) throw new NotFoundException('Claim not found');
 

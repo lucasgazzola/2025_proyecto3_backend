@@ -14,15 +14,23 @@ export class ProjectsService {
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
   ) {}
 
-  async createForUser(user: any, createProjectDto: CreateProjectDto) {
-    const created = new this.projectModel({
-      title: createProjectDto.title,
-      description: createProjectDto.description,
-      projectType: createProjectDto.projectType,
-      user: new Types.ObjectId(user.id || user._id),
-    });
-    return created.save();
+async createForUser(user: any, createProjectDto: CreateProjectDto) {
+  const created = new this.projectModel({
+    title: createProjectDto.title,
+    description: createProjectDto.description,
+    projectType: createProjectDto.projectType,
+    user: new Types.ObjectId(user.id || user._id),
+  });
+
+  try {
+    const saved = await created.save();
+    console.log('Proyecto guardado:', saved);
+    return saved;
+  } catch (err) {
+    console.error('Error al guardar proyecto:', err);
+    throw err;
   }
+}
 
 async findAllForUser(user: any): Promise<ProjectResponseDto[]> {
   const baseQuery: any = { deletedAt: { $exists: false } };

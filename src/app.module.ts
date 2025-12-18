@@ -24,20 +24,15 @@ import { MongooseSchemasModule } from './mongoose/mongoose-schemas.module';
       rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',
     }),
-    MongooseModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        uri:
-          configService.get<string>('MONGO_URI') ||
-          'mongodb://localhost/proyecto3',
-          retryWrites: true,
-          w: 'majority',
-        // optional: pass driver options
-        // useNewUrlParser: true,
-        // useUnifiedTopology: true,
-      }),
-    }),
+MongooseModule.forRootAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (configService: ConfigService) => ({
+    uri: configService.get<string>('MONGO_URI'),
+    retryWrites: true,
+    w: 'majority',
+  }),
+}),
     MongooseSchemasModule,
     ClaimsModule,
     DashboardModule,

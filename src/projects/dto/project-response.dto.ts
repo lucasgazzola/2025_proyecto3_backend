@@ -27,7 +27,7 @@ export class ProjectResponseDto {
       role: string;
       phone?: string;
     };
-    createdAt?: Date;
+
     updatedAt?: Date;
   }[];
   createdAt?: Date;

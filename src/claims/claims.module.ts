@@ -6,12 +6,7 @@ import { MongooseSchemasModule } from '../mongoose/mongoose-schemas.module';
 import { AuthModule } from '../auth/auth.module';
 import { ClaimRepository } from './repositories/claim.repository';
 import { CLAIM_REPOSITORY } from './repositories/claim.repository.interface';
-import {
-  ClaimStatus,
-  ClaimPriority,
-  ClaimCriticality,
-  ClaimType,
-} from '../common/enums/claims.enums';
+
 
 @Module({
   imports: [
