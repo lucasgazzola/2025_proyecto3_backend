@@ -21,16 +21,9 @@ async createForUser(user: any, createProjectDto: CreateProjectDto) {
     projectType: createProjectDto.projectType,
     user: new Types.ObjectId(user.id || user._id),
   });
-
-  try {
-    const saved = await created.save();
-    console.log('Proyecto guardado:', saved);
-    return saved;
-  } catch (err) {
-    console.error('Error al guardar proyecto:', err);
-    throw err;
-  }
+  return created.save();
 }
+
 
 async findAllForUser(user: any): Promise<ProjectResponseDto[]> {
   const baseQuery: any = { deletedAt: { $exists: false } };
